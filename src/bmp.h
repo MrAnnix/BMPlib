@@ -207,6 +207,28 @@ void bitone(BMPFILE *image, PIXELS dark, PIXELS light, int threshold);
 
 void grayscale(BMPFILE *image, char rgby);
 
+/**invert*********************************************************************
+
+  Resume       Inverts the color of the image
+
+******************************************************************************/
+
+void invert(BMPFILE *image);
+
+/**mirror**********************************************************************
+
+  Resume       Leflects the image
+
+  Description  reflcts the image following the indications in hv. If hv value
+          is 'h' it is reflected horizontally and if 'v' it is reflected
+          vertically.
+
+  Colat. Effe. If it occurs an error, the error variable is set appropiatelly.
+
+******************************************************************************/
+
+void mirror(BMPFILE *image, char hv, int *error);
+
 /**rotate*********************************************************************
 
   Resume       Rotates 90º to the left/right the image
@@ -215,11 +237,27 @@ void grayscale(BMPFILE *image, char rgby);
           in motion. If motion value is 'l' it is rotated to the left and if 'r'
           it is rotated to the right.
 
-  Colat. Effe. If it occursan error, the error variable is set appropiatelly.
+  Colat. Effe. If it occurs an error, the error variable is set appropiatelly.
 
 ******************************************************************************/
 
 int rotate(BMPFILE *image, char motion, int *error);
+
+/**generate_histogram*********************************************************
+
+  Resume       [obligatorio]
+
+  Description  [opcional]
+
+  Parameters   [opcional]
+
+  Colat. Effe. [obligatorio]
+
+  See also     [opcional]
+
+******************************************************************************/
+
+int generate_histogram(BMPFILE *image, char *path, int *error);
 
 /**bmpdup*********************************************************************
 

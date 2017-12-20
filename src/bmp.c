@@ -36,7 +36,10 @@ SOFTWARE.
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <errno.h>
 
 #include "bmp.h"
@@ -86,16 +89,18 @@ PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion,
 
 void free_bitmap(PIXELS **bitmap, int height);
 
+void call_gnuplot(char *csv_template, char *path, int *error);
+
 /*---------------------------------------------------------------------------*/
 /* Function definitions                                                      */
 /*---------------------------------------------------------------------------*/
 
 const char *get_error_msg_bmp(int error){
   if(error <= 0){
-    if(-error > NUM_ERROR_MSGS_BMP){
+    if(-error < NUM_ERROR_MSGS_BMP){
       return error_map_bmp[-error];
     }
-    return error_map_bmp[NUM_ERROR_MSGS_BMP];
+    return error_map_bmp[NUM_ERROR_MSGS_BMP - 1];
   }else{
     return strerror(error);
   }
@@ -484,6 +489,46 @@ void grayscale(BMPFILE *image, char rgby){
   }
 }
 
+void invert(BMPFILE *image){
+  int i,j;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      image->bitmap[i][j].r = 255 - image->bitmap[i][j].r;
+      image->bitmap[i][j].g = 255 - image->bitmap[i][j].g;
+      image->bitmap[i][j].b = 255 - image->bitmap[i][j].b;
+    }
+  }
+}
+
+void mirror(BMPFILE *image, char hv, int *error){
+  BMPFILE aux;
+
+  if(bmpdup(image, &aux, error)){
+    return;
+  }
+
+  int i,j;
+  if(hv == 'v'){
+    int w = image->ih.biWidth;
+
+    for(i=0; i<image->ih.biHeight; i++){
+      for(j=0; j<image->ih.biWidth; j++){
+        memcpy(&image->bitmap[i][j], &aux.bitmap[i][w-j-1], sizeof(PIXELS));
+      }
+    }
+  }else{
+    int h = image->ih.biHeight;
+
+    for(i=0; i<image->ih.biHeight; i++){
+      for(j=0; j<image->ih.biWidth; j++){
+        memcpy(&image->bitmap[i][j], &aux.bitmap[h-1-i][j], sizeof(PIXELS));
+      }
+    }
+  }
+
+  clean_image(&aux);
+}
+
 int rotate(BMPFILE *image, char motion, int *error){
   int new_width;
   int new_height;
@@ -516,6 +561,65 @@ int rotate(BMPFILE *image, char motion, int *error){
   image->fh.bfSize = image->fh.bfSize + image->ih.biSizeImage - old_biSizeImage;
 
   image->bitmap = new_im;
+  return 0;
+}
+
+int generate_histogram(BMPFILE *image, char *path, int *error){
+  unsigned int histo_r[255];
+  unsigned int histo_g[255];
+  unsigned int histo_b[255];
+  memset(histo_r, 0, sizeof(int)*256);//clean the arrays
+  memset(histo_g, 0, sizeof(int)*256);
+  memset(histo_b, 0, sizeof(int)*256);
+
+  int r,g,b;
+  r = 0; g = 0; b = 0;
+
+  int i,j;
+  for(i=0; i<image->ih.biHeight; i++){
+    for (j=0; j<image->ih.biWidth; j++){
+      r = image->bitmap[i][j].r;
+      g = image->bitmap[i][j].g;
+      b = image->bitmap[i][j].b;
+
+      histo_r[r]++;
+      histo_g[g]++;
+      histo_b[b]++;
+    }
+  }
+
+  FILE *fd;
+  int temp;
+  char template[]="histogram_XXXXXX.csv";
+  temp = mkstemps(template, 4);
+
+  if((fd = fdopen(temp, "w")) == NULL){
+    *error = errno;
+    errno = 0;
+    return -1;
+  }
+
+  fprintf(fd, "Intensity\t");
+  fprintf(fd, "Red\t");
+  fprintf(fd, "Green\t");
+  fprintf(fd, "Blue\n");
+
+  for(i=0; i<256; i++){
+    fprintf(fd, "%d",i);
+    fprintf(fd, "\t");
+    fprintf(fd, "%u", histo_r[i]);
+    fprintf(fd, "\t");
+    fprintf(fd, "%u", histo_g[i]);
+    fprintf(fd, "\t");
+    fprintf(fd, "%u", histo_b[i]);
+    fprintf(fd, "\n");
+  }
+  fclose(fd);
+
+  call_gnuplot(template, path, error);
+
+  remove(template);
+
   return 0;
 }
 
@@ -584,9 +688,9 @@ PIXELS **generate_bitmap(int new_height, int new_width, int *error){
     new_bitmap[i] = NULL;
     new_bitmap[i] = malloc(new_width * sizeof(PIXELS *));
     if(errno){
-      for(i=0; i<a; i++){
-        if(new_bitmap[i] != NULL){
-          free(new_bitmap[i]);
+      for(a=0; a<i; a++){
+        if(new_bitmap[a] != NULL){
+          free(new_bitmap[a]);
         }
       }
       if(new_bitmap != NULL){
@@ -632,4 +736,49 @@ PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion
     }
   }
   return new_bitmap;
+}
+
+void call_gnuplot(char *csv_template, char *path, int *error){
+  int scpt;
+  char script[]="script_XXXXXX.gp";
+  scpt = mkstemps(script, 3);
+
+  FILE *fd;
+
+  if((fd = fdopen(scpt, "w")) == NULL){
+    *error = errno;
+    errno = 0;
+    return;
+  }
+
+  fprintf(fd, "plot for [COL=2:4] inputfile using COL title columnheader with lines\n");
+  fprintf(fd, "set terminal png\n");
+  fprintf(fd, "set output outputfile\n");
+  fprintf(fd, "replot\n");
+
+  fclose(fd);
+
+  char f_argument[33] = "inputfile='";
+  strcat(f_argument, csv_template);
+  strcat(f_argument,"'");
+  char s_argument[PATH_MAX+20] = "outputfile='";
+  strcat(s_argument, path);
+  strcat(s_argument,".png'");
+
+  int status = 0;
+  pid_t fk = fork();
+  if(fk == 0){
+    execl("/usr/bin/gnuplot", "gnuplot", "-e", f_argument, "-e", s_argument, script, NULL);
+  }else{
+    wait(&status);
+  }
+  if(status){
+    *error = UNKNOWN;
+  }
+  remove(script);
+
+  if(errno){
+    *error = errno;
+    errno = 0;
+  }
 }
