@@ -79,6 +79,12 @@ static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
 /* Static function prototypes                                                */
 /*---------------------------------------------------------------------------*/
 
+PIXELS **generate_bitmap(int new_height, int new_width, int *error);
+
+PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion,
+                  int *error);
+
+void free_bitmap(PIXELS **bitmap, int height);
 
 /*---------------------------------------------------------------------------*/
 /* Function definitions                                                      */
@@ -374,7 +380,7 @@ void clean_image(BMPFILE *image){
   }
 }
 
-int save_image(BMPFILE image, char *path, int *error){
+int save_image(BMPFILE *image, char *path, int *error){
   FILE *fd;
   if((fd = fopen(path, "r")) == NULL){
     *error = errno;
@@ -382,14 +388,14 @@ int save_image(BMPFILE image, char *path, int *error){
     return -1;
 	}
 
-  fwrite(&image.fh, sizeof(BITMAPFILEHEADER), 1, fd);
-  fwrite(&image.ih, sizeof(BITMAPINFOHEADER), 1, fd);
-  fwrite(image.alignment, image.aligment_size, 1, fd );
+  fwrite(&image->fh, sizeof(BITMAPFILEHEADER), 1, fd);
+  fwrite(&image->ih, sizeof(BITMAPINFOHEADER), 1, fd);
+  fwrite(image->alignment, image->aligment_size, 1, fd );
 
   int i, k;
-  for(i=0; i<image.ih.biHeight; ++i){
-    fwrite(image.bitmap[i], sizeof(PIXELS), image.ih.biWidth, fd);
-    for(k = 0; k < image.padding; k++){
+  for(i=0; i<image->ih.biHeight; ++i){
+    fwrite(image->bitmap[i], sizeof(PIXELS), image->ih.biWidth, fd);
+    for(k = 0; k < image->padding; k++){
       fputc(0, fd);
     }
   }
@@ -397,6 +403,233 @@ int save_image(BMPFILE image, char *path, int *error){
   return 0;
 }
 
+void sepia(BMPFILE *image){
+  int i,j,r,g,b;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      r = image->bitmap[i][j].r*0.393 + image->bitmap[i][j].g*0.769
+          + image->bitmap[i][j].b*0.189;
+      g = image->bitmap[i][j].r*0.349 + image->bitmap[i][j].g*0.686
+          + image->bitmap[i][j].b*0.168;
+      b = image->bitmap[i][j].r*0.272 + image->bitmap[i][j].g*0.534
+          + image->bitmap[i][j].b*0.131;
+
+      (r>255) ? (image->bitmap[i][j].r = 255) : (image->bitmap[i][j].r = r);
+      (g>255) ? (image->bitmap[i][j].g = 255) : (image->bitmap[i][j].g = g);
+      (b>255) ? (image->bitmap[i][j].b = 255) : (image->bitmap[i][j].b = b);
+    }
+  }
+}
+
+void bitone(BMPFILE *image, PIXELS dark, PIXELS light, int threshold){
+  int i,j;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      if((image->bitmap[i][j].r + image->bitmap[i][j].g + image->bitmap[i][j].b)
+          < threshold){
+        image->bitmap[i][j] = dark;
+      }else{
+        image->bitmap[i][j] = light;
+      }
+    }
+  }
+}
+
+void grayscale(BMPFILE *image, char rgby){
+  int i,j;
+  unsigned char result;
+
+  switch (rgby){
+    case 'r':
+    for(i=0; i<image->ih.biHeight; i++){
+        for(j=0; j<image->ih.biWidth; j++){
+           result = image->bitmap[i][j].r;
+           image->bitmap[i][j].b = result;
+           image->bitmap[i][j].g = result;
+        }
+    }
+    break;
+
+    case 'g':
+    for(i=0; i<image->ih.biHeight; i++){
+        for(j=0; j<image->ih.biWidth; j++){
+          result = image->bitmap[i][j].g;
+          image->bitmap[i][j].r = result;
+          image->bitmap[i][j].g = result;
+        }
+    }
+    break;
+
+    case 'b':
+    for(i=0; i<image->ih.biHeight; i++){
+        for(j=0; j<image->ih.biWidth; j++){
+          result = image->bitmap[i][j].b;
+          image->bitmap[i][j].r = result;
+          image->bitmap[i][j].g = result;
+        }
+    }
+    break;
+
+    case 'y':
+    for(i=0; i<image->ih.biHeight; i++){
+        for(j=0; j<image->ih.biWidth; j++){
+          result = image->bitmap[i][j].r*0.2126 + image->bitmap[i][j].g*0.7152
+              + image->bitmap[i][j].b*0.0722;
+          image->bitmap[i][j].r = result;
+          image->bitmap[i][j].g = result;
+          image->bitmap[i][j].b = result;
+        }
+    }
+    break;
+  }
+}
+
+int rotate(BMPFILE *image, char motion, int *error){
+  int new_width;
+  int new_height;
+  int new_XPelsPerMeter = image->ih.biYPelsPerMeter;
+  int new_YPelsPerMeter = image->ih.biXPelsPerMeter;
+
+  PIXELS **new_im;
+
+  new_width = image->ih.biHeight;
+  new_height = image->ih.biWidth;
+
+  new_im = rotate_bitmap(image->bitmap, image->ih.biHeight, image->ih.biWidth
+                      , motion, error);
+  if(new_im == NULL){
+    return -1;
+  }
+
+  free_bitmap(image->bitmap, image->ih.biHeight);
+
+  image->ih.biWidth = new_width;
+  image->ih.biHeight = new_height;
+  image->ih.biXPelsPerMeter = new_XPelsPerMeter;
+  image->ih.biYPelsPerMeter = new_YPelsPerMeter;
+
+  image->padding = (4-(image->ih.biWidth*sizeof(PIXELS))%4)%4;
+
+  int old_biSizeImage = image->ih.biSizeImage;
+  image->ih.biSizeImage = image->ih.biHeight*(image->ih.biWidth*3+image->padding);
+
+  image->fh.bfSize = image->fh.bfSize + image->ih.biSizeImage - old_biSizeImage;
+
+  image->bitmap = new_im;
+  return 0;
+}
+
+int bmpdup(BMPFILE *source, BMPFILE *dest, int *error){
+  dest->fh = source->fh;
+  dest->ih = source->ih;
+  dest->aligment_size = source->aligment_size;
+  if(source->alignment){
+    dest->alignment = strdup(source->alignment);
+  }else{
+    dest->alignment = NULL;
+  }
+  dest->padding = source->padding;
+  dest->bitmap = NULL;
+  dest->bitmap = (PIXELS **) malloc(sizeof(PIXELS *)*source->ih.biHeight);
+  if(errno){
+    if(dest->bitmap != NULL){
+      free(dest->bitmap);
+    }
+    *error = errno;
+    errno = 0;
+    return -1;
+  }
+  int i,j,a;
+  for(a=0; a<source->ih.biHeight; a++){
+    dest->bitmap[a] = NULL;
+    dest->bitmap[a] = (PIXELS*)malloc(sizeof(PIXELS)*source->ih.biWidth);
+    if(errno){
+      for(i=0; i<a; i++){
+        if(dest->bitmap[i] != NULL){
+          free(dest->bitmap[i]);
+        }
+      }
+      if(dest->bitmap != NULL){
+        free(dest->bitmap);
+      }
+      *error = errno;
+      errno = 0;
+      return -1;
+    }
+  }
+
+  for(i = 0; i<source->ih.biHeight; i++){
+    for(j = 0; j<source->ih.biWidth; j++){
+      dest->bitmap[i][j].r = source->bitmap[i][j].r;
+  	  dest->bitmap[i][j].b = source->bitmap[i][j].b;
+      dest->bitmap[i][j].g = source->bitmap[i][j].g;
+    }
+  }
+  return 0;
+}
+
 /*---------------------------------------------------------------------------*/
 /* Static function definitions                                               */
 /*---------------------------------------------------------------------------*/
+
+PIXELS **generate_bitmap(int new_height, int new_width, int *error){
+  PIXELS **new_bitmap;
+
+  if((new_bitmap = malloc(new_height * sizeof(PIXELS *))) == NULL){
+    return NULL;
+  }
+
+  int i,a;
+  for(i=0; i<new_height; i++){
+    new_bitmap[i] = NULL;
+    new_bitmap[i] = malloc(new_width * sizeof(PIXELS *));
+    if(errno){
+      for(i=0; i<a; i++){
+        if(new_bitmap[i] != NULL){
+          free(new_bitmap[i]);
+        }
+      }
+      if(new_bitmap != NULL){
+        free(new_bitmap);
+      }
+      *error = errno;
+      errno = 0;
+      return NULL;
+    }
+  }
+  return new_bitmap;
+}
+
+void free_bitmap(PIXELS **bitmap, int height){
+  int i;
+  for(i=0; i<height; i++){
+    if(bitmap[i] != NULL){
+      free(bitmap[i]);
+    }
+  }
+  if(bitmap != NULL){
+    free(bitmap);
+  }
+}
+
+PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion
+                  , int *error){
+  int new_width = height;
+  int new_height = width;
+
+  PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
+  if(new_bitmap == NULL){
+    return NULL;
+  }
+
+  int i,j;
+  for (i = 0; i < new_height; i++) {
+    for (j = 0; j < new_width; j++) {
+        if(motion == 'r')
+          new_bitmap[i][j] = bitmap[j][width-1-i];
+        else
+          new_bitmap[i][j] = bitmap[height-1-j][i];
+    }
+  }
+  return new_bitmap;
+}

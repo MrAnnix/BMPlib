@@ -159,6 +159,85 @@ int load_image(BMPFILE *image, char *path, int *error);
 
 void clean_image(BMPFILE *image);
 
+/**save_image******************************************************************
+
+  Resume       Save the image in the system
+
+  Description  Save the image pointed by image to the path given
+            by path. If there is an error, the error variable is set.
+
+  See also     load_image
+
+******************************************************************************/
+
+int save_image(BMPFILE *image, char *path, int *error);
+
+/**sepia*******************************************************************
+
+  Resume       Gives to the bitmap a sepia tone.
+
+******************************************************************************/
+
+void sepia(BMPFILE *image);
+
+/**grayscale*******************************************************************
+
+  Resume       Converts the bitmap the image to bitonal.
+
+  Description  Converts the bitmap the image to bitonal. It computes the sum of
+            the tree components R+G+B. If this is less than the threshold, it
+            will copy the value of the PIXELS dark into the bitmap pixel.
+            If the sum is greater or equal than the threshold, it must copy the
+            value of the PIXELS light.
+
+******************************************************************************/
+
+void bitone(BMPFILE *image, PIXELS dark, PIXELS light, int threshold);
+
+/**grayscale*******************************************************************
+
+  Resume       Gives the bitmap of the image a gray tone
+
+  Description  Coverts the image to a grayscale. The channel selected to gray
+            has to be selected by the rgby valiable. 'r' for the red, 'g' for
+            the green, 'b' for blue and 'y' for the luminance computed as:
+            r*0.2126 + g*0.7152 + b*0.072
+
+******************************************************************************/
+
+void grayscale(BMPFILE *image, char rgby);
+
+/**rotate*********************************************************************
+
+  Resume       Rotates 90º to the left/right the image
+
+  Description  Rotates 90º to the left/right the image following the indication
+          in motion. If motion value is 'l' it is rotated to the left and if 'r'
+          it is rotated to the right.
+
+  Colat. Effe. If it occursan error, the error variable is set appropiatelly.
+
+******************************************************************************/
+
+int rotate(BMPFILE *image, char motion, int *error);
+
+/**bmpdup*********************************************************************
+
+  Resume       Copies the image source to dest
+
+  Description  Returns in dest a pointer to a new image, which is a duplicate
+            of the image pointed to by source. The returned pointer must be
+            passed to clean_image to avoid a memory leak.
+
+  Colat. Effe. If an error occurs, a null pointer is returned in dest and there
+          error variable may be set.
+
+  See also     clean_image
+
+******************************************************************************/
+
+int bmpdup(BMPFILE *source, BMPFILE *dest, int *error);
+
 /**Function*******************************************************************
 
   Resume       [obligatorio]
@@ -172,7 +251,5 @@ void clean_image(BMPFILE *image);
   See also     [opcional]
 
 ******************************************************************************/
-
-int save_image(BMPFILE image, char *path_to_store, int *error);
 
 #endif
