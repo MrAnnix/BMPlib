@@ -751,6 +751,7 @@ void call_gnuplot(char *csv_template, char *path, int *error){
     return;
   }
 
+  fprintf(fd, "set xrange [0:255]\n");
   fprintf(fd, "plot for [COL=2:4] inputfile using COL title columnheader with lines\n");
   fprintf(fd, "set terminal png\n");
   fprintf(fd, "set output outputfile\n");
