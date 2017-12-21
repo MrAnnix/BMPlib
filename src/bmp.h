@@ -245,15 +245,14 @@ int rotate(BMPFILE *image, char motion, int *error);
 
 /**generate_histogram*********************************************************
 
-  Resume       [obligatorio]
+  Resume       Generates the histogram of the image
 
-  Description  [opcional]
+  Description  Generates the histogram of the tree channels and luminance of
+            image, and it is saved in path as a png file (.png is added). If it
+            occurs an error, the function returns -1 and error is set
+            appropiatelly. It is required to have  gnuplot installed.
 
-  Parameters   [opcional]
-
-  Colat. Effe. [obligatorio]
-
-  See also     [opcional]
+  See also     man pages of gnuplot
 
 ******************************************************************************/
 
@@ -267,14 +266,46 @@ int generate_histogram(BMPFILE *image, char *path, int *error);
             of the image pointed to by source. The returned pointer must be
             passed to clean_image to avoid a memory leak.
 
-  Colat. Effe. If an error occurs, a null pointer is returned in dest and there
-          error variable may be set.
+  Colat. Effe. If an error occurs, -1 is returned, a null pointer is set in
+            dest and there may be set the error variable.
 
   See also     clean_image
 
 ******************************************************************************/
 
 int bmpdup(BMPFILE *source, BMPFILE *dest, int *error);
+
+/**reduce*********************************************************************
+
+  Resume       Reduces the resolution of the image
+
+  Description  Decimates the bitmap of the image. Reduces the samples of the
+            image by a factor. For it reduces the high frecuency components
+            of the signal (low-pass filter), and keeps one of every M samples.
+            If it occurs an error, the function returns -1 and error is set
+            appropiatelly.
+
+  See also     https://en.wikipedia.org/wiki/Decimation_(signal_processing)
+
+******************************************************************************/
+
+int reduce(BMPFILE *image, int factor, int *error);
+
+/**enlarge********************************************************************
+
+  Resume       Enlarges the resolution of the image (Nearest neighbor for the
+            moment)
+
+  Description  Upsamples the bitmap of the image. Increase the samples of the
+            image by a factor. And then reduces the high frecuency components
+            of the signal (Interpolation). If there is an error, the function
+            returns -1 and error is set appropiatelly.
+
+  See also     https://en.wikipedia.org/wiki/Upsampling
+
+******************************************************************************/
+
+int enlarge(BMPFILE *image, int factor, int *error);
 
 /**Function*******************************************************************
 

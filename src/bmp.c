@@ -85,11 +85,17 @@ static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
 PIXELS **generate_bitmap(int new_height, int new_width, int *error);
 
 PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion,
-                  int *error);
+          int *error);
 
 void free_bitmap(PIXELS **bitmap, int height);
 
 void call_gnuplot(char *csv_template, char *path, int *error);
+
+PIXELS **decimate_bitmap(PIXELS **bitmap, int new_height, int new_width,
+          int old_height, int old_width, int factor, int *error);
+
+PIXELS **upsample_bitmap(PIXELS **bitmap, int new_height, int new_width,
+          int old_height, int old_width, int factor, int *error);
 
 /*---------------------------------------------------------------------------*/
 /* Function definitions                                                      */
@@ -387,7 +393,7 @@ void clean_image(BMPFILE *image){
 
 int save_image(BMPFILE *image, char *path, int *error){
   FILE *fd;
-  if((fd = fopen(path, "r")) == NULL){
+  if((fd = fopen(path, "w")) == NULL){
     *error = errno;
     errno = 0;
     return -1;
@@ -672,6 +678,76 @@ int bmpdup(BMPFILE *source, BMPFILE *dest, int *error){
   return 0;
 }
 
+int reduce(BMPFILE *image, int factor, int *error){
+  int new_width = image->ih.biWidth/factor;
+  int new_height = image->ih.biHeight/factor;
+  int new_XPelsPerMeter = image->ih.biXPelsPerMeter/factor;
+  int new_YPelsPerMeter = image->ih.biYPelsPerMeter/factor;
+
+  PIXELS **new_im;
+
+  new_im = decimate_bitmap(image->bitmap, new_height, new_width,
+                  image->ih.biHeight, image->ih.biWidth, factor, error);
+
+  if(new_im == NULL){
+    return -1;
+  }
+
+  free_bitmap(image->bitmap, image->ih.biHeight);
+
+  image->ih.biWidth = new_width;
+  image->ih.biHeight = new_height;
+  image->ih.biXPelsPerMeter = new_XPelsPerMeter;
+  image->ih.biYPelsPerMeter = new_YPelsPerMeter;
+
+  image->padding = (4 - (image->ih.biWidth * sizeof(PIXELS)) % 4) % 4;
+
+  int old_biSizeImage = image->ih.biSizeImage;
+  image->ih.biSizeImage = image->ih.biHeight * (image->ih.biWidth * 3
+      + image->padding);
+
+  image->fh.bfSize = image->fh.bfSize + image->ih.biSizeImage
+      - old_biSizeImage;
+
+  image->bitmap = new_im;
+  return 0;
+}
+
+int enlarge(BMPFILE *image, int factor, int *error){
+  int new_width = image->ih.biWidth*factor;
+  int new_height = image->ih.biHeight*factor;
+  int new_XPelsPerMeter = image->ih.biXPelsPerMeter*factor;
+  int new_YPelsPerMeter = image->ih.biYPelsPerMeter*factor;
+
+  PIXELS **new_im;
+
+  new_im = upsample_bitmap(image->bitmap, new_height, new_width,
+                  image->ih.biHeight, image->ih.biWidth, factor, error);
+
+  if(new_im == NULL){
+    return -1;
+  }
+
+  free_bitmap(image->bitmap, image->ih.biHeight);
+
+  image->ih.biWidth = new_width;
+  image->ih.biHeight = new_height;
+  image->ih.biXPelsPerMeter = new_XPelsPerMeter;
+  image->ih.biYPelsPerMeter = new_YPelsPerMeter;
+
+  image->padding = (4 - (image->ih.biWidth * sizeof(PIXELS)) % 4) % 4;
+
+  int old_biSizeImage = image->ih.biSizeImage;
+  image->ih.biSizeImage = image->ih.biHeight * (image->ih.biWidth * 3
+      + image->padding);
+
+  image->fh.bfSize = image->fh.bfSize + image->ih.biSizeImage
+      - old_biSizeImage;
+
+  image->bitmap = new_im;
+  return 0;
+}
+
 /*---------------------------------------------------------------------------*/
 /* Static function definitions                                               */
 /*---------------------------------------------------------------------------*/
@@ -680,6 +756,8 @@ PIXELS **generate_bitmap(int new_height, int new_width, int *error){
   PIXELS **new_bitmap;
 
   if((new_bitmap = malloc(new_height * sizeof(PIXELS *))) == NULL){
+    *error = errno;
+    errno = 0;
     return NULL;
   }
 
@@ -687,7 +765,7 @@ PIXELS **generate_bitmap(int new_height, int new_width, int *error){
   for(i=0; i<new_height; i++){
     new_bitmap[i] = NULL;
     new_bitmap[i] = malloc(new_width * sizeof(PIXELS *));
-    if(errno){
+    if(new_bitmap[i] == NULL){
       for(a=0; a<i; a++){
         if(new_bitmap[a] != NULL){
           free(new_bitmap[a]);
@@ -700,6 +778,7 @@ PIXELS **generate_bitmap(int new_height, int new_width, int *error){
       errno = 0;
       return NULL;
     }
+    memset(new_bitmap[i], 0, new_width * sizeof(PIXELS *));
   }
   return new_bitmap;
 }
@@ -716,8 +795,8 @@ void free_bitmap(PIXELS **bitmap, int height){
   }
 }
 
-PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion
-                  , int *error){
+PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion,
+          int *error){
   int new_width = height;
   int new_height = width;
 
@@ -782,4 +861,56 @@ void call_gnuplot(char *csv_template, char *path, int *error){
     *error = errno;
     errno = 0;
   }
+}
+
+PIXELS **decimate_bitmap(PIXELS **bitmap, int new_height, int new_width,
+          int old_height, int old_width, int factor, int *error){
+  int i,j,k,l;
+  PIXELS mean;
+  mean.r = 0;
+  mean.g = 0;
+  mean.b = 0;
+
+  PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
+  if(new_bitmap == NULL){
+    return NULL;
+  }
+
+  for (i=0; i<new_height; i++) {
+    for (j=0; j<new_width; j++) {
+      mean.r = bitmap[i*factor][j*factor].r;
+      mean.g = bitmap[i*factor][j*factor].g;
+      mean.b = bitmap[i*factor][j*factor].b;
+      for(k = i*factor; (k < i*factor+factor)&&(k<old_height); k++){
+        for(l = j*factor; (l < j*factor+factor)&&(l<old_width); l++){
+          mean.r = (mean.r + bitmap[k][l].r)/2;
+          mean.g = (mean.g + bitmap[k][l].g)/2;
+          mean.b = (mean.b + bitmap[k][l].b)/2;
+        }
+      }
+      new_bitmap[i][j] = mean;
+      mean.r = 0;
+      mean.g = 0;
+      mean.b = 0;
+    }
+  }
+  return new_bitmap;
+}
+
+PIXELS **upsample_bitmap(PIXELS **bitmap, int new_height, int new_width,
+          int old_height, int old_width, int factor, int *error){
+
+  PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
+  if(new_bitmap == NULL){
+    return NULL;
+  }
+
+  int i,j;
+  for (i=0; i<new_height; i++){
+    for (j=0; j<new_width; j++){
+      new_bitmap[i][j] = bitmap[i/factor][j/factor];
+    }
+  }
+
+  return new_bitmap;
 }
