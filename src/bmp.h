@@ -293,8 +293,7 @@ int reduce(BMPFILE *image, int factor, int *error);
 
 /**enlarge********************************************************************
 
-  Resume       Enlarges the resolution of the image (Nearest neighbor for the
-            moment)
+  Resume       Enlarges the resolution of the image (Lanczos)
 
   Description  Upsamples the bitmap of the image. Increase the samples of the
             image by a factor. And then reduces the high frecuency components

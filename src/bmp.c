@@ -40,6 +40,7 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <math.h>
 #include <errno.h>
 
 #include "bmp.h"
@@ -96,6 +97,10 @@ PIXELS **decimate_bitmap(PIXELS **bitmap, int new_height, int new_width,
 
 PIXELS **upsample_bitmap(PIXELS **bitmap, int new_height, int new_width,
           int old_height, int old_width, int factor, int *error);
+
+double sinc(double var);
+
+double _L(double var, int a);
 
 /*---------------------------------------------------------------------------*/
 /* Function definitions                                                      */
@@ -905,12 +910,41 @@ PIXELS **upsample_bitmap(PIXELS **bitmap, int new_height, int new_width,
     return NULL;
   }
 
-  int i,j;
+  int i,j,k,l;
+  unsigned char r,g,b;
   for (i=0; i<new_height; i++){
     for (j=0; j<new_width; j++){
-      new_bitmap[i][j] = bitmap[i/factor][j/factor];
+      r=0; g=0; b=0;
+
+      for(k=(i/factor)-factor+1; k<=(i/factor)+factor; k++){
+        for(l=(j/factor)-factor+1; l<=(j/factor)+factor; l++){
+          if((k<old_height)&&(l<old_width)&&(k>=0)&&(l>=0)){
+            r += bitmap[k][l].r * _L((i/factor)-k, factor) * _L((j/factor)-l, factor);
+            g += bitmap[k][l].g * _L((i/factor)-k, factor) * _L((j/factor)-l, factor);
+            b += bitmap[k][l].b * _L((i/factor)-k, factor) * _L((j/factor)-l, factor);
+          }
+        }
+      }
+      (r>255) ? (new_bitmap[i][j].r = 255) : (new_bitmap[i][j].r = r);
+      (g>255) ? (new_bitmap[i][j].g = 255) : (new_bitmap[i][j].g = g);
+      (b>255) ? (new_bitmap[i][j].b = 255) : (new_bitmap[i][j].b = b);
     }
   }
 
   return new_bitmap;
+}
+
+double sinc(double var){
+  if(var == 0.0){
+    return 1.0;
+  }
+  return sin(M_PI*var)/(M_PI*var);
+}
+
+double _L(double var, int a){//Lanczos kernel
+  if(abs(var) >= 0 && abs(var) < a){
+    return sinc(var)*sinc(var/a);
+  }
+
+  return 0;
 }
