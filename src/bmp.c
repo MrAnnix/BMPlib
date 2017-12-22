@@ -40,7 +40,6 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <math.h>
 #include <errno.h>
 
 #include "bmp.h"
@@ -50,6 +49,9 @@ SOFTWARE.
 /*---------------------------------------------------------------------------*/
 
 #define NUM_ERROR_MSGS_BMP 4
+
+#define E_PI    3.141592653589793238462643383279502884197169399375105820974
+#define E_PI_SQ 9.869604401089358618834490999876151135313699407240790626413
 
 static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
   {
@@ -92,15 +94,14 @@ void free_bitmap(PIXELS **bitmap, int height);
 
 void call_gnuplot(char *csv_template, char *path, int *error);
 
-PIXELS **decimate_bitmap(PIXELS **bitmap, int new_height, int new_width,
-          int old_height, int old_width, int factor, int *error);
-
-PIXELS **upsample_bitmap(PIXELS **bitmap, int new_height, int new_width,
-          int old_height, int old_width, int factor, int *error);
+PIXELS **resample_bitmap(PIXELS **bitmap, int new_height, int new_width,
+          int old_height, int old_width, int *error);
 
 double sinc(double var);
 
-double _L(double var, int a);
+double _L(double var);
+
+double fast_sin(double var);
 
 /*---------------------------------------------------------------------------*/
 /* Function definitions                                                      */
@@ -691,8 +692,8 @@ int reduce(BMPFILE *image, int factor, int *error){
 
   PIXELS **new_im;
 
-  new_im = decimate_bitmap(image->bitmap, new_height, new_width,
-                  image->ih.biHeight, image->ih.biWidth, factor, error);
+  new_im = resample_bitmap(image->bitmap, new_height, new_width,
+                  image->ih.biHeight, image->ih.biWidth, error);
 
   if(new_im == NULL){
     return -1;
@@ -726,8 +727,8 @@ int enlarge(BMPFILE *image, int factor, int *error){
 
   PIXELS **new_im;
 
-  new_im = upsample_bitmap(image->bitmap, new_height, new_width,
-                  image->ih.biHeight, image->ih.biWidth, factor, error);
+  new_im = resample_bitmap(image->bitmap, new_height, new_width,
+                  image->ih.biHeight, image->ih.biWidth, error);
 
   if(new_im == NULL){
     return -1;
@@ -868,82 +869,92 @@ void call_gnuplot(char *csv_template, char *path, int *error){
   }
 }
 
-PIXELS **decimate_bitmap(PIXELS **bitmap, int new_height, int new_width,
-          int old_height, int old_width, int factor, int *error){
-  int i,j,k,l;
-  PIXELS mean;
-  mean.r = 0;
-  mean.g = 0;
-  mean.b = 0;
+PIXELS **resample_bitmap(PIXELS **bitmap, int new_height, int new_width,
+          int old_height, int old_width, int *error){
 
   PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
   if(new_bitmap == NULL){
     return NULL;
   }
 
-  for (i=0; i<new_height; i++) {
-    for (j=0; j<new_width; j++) {
-      mean.r = bitmap[i*factor][j*factor].r;
-      mean.g = bitmap[i*factor][j*factor].g;
-      mean.b = bitmap[i*factor][j*factor].b;
-      for(k = i*factor; (k < i*factor+factor)&&(k<old_height); k++){
-        for(l = j*factor; (l < j*factor+factor)&&(l<old_width); l++){
-          mean.r = (mean.r + bitmap[k][l].r)/2;
-          mean.g = (mean.g + bitmap[k][l].g)/2;
-          mean.b = (mean.b + bitmap[k][l].b)/2;
+  double row_ratio = (double)old_height / (double)new_height;
+  double col_ratio = (double)old_width / (double)new_width;
+
+  int x,y,i,j;
+
+  for(i=0; i<new_height; i++){
+    double old_i = i*row_ratio;
+    double floor_i = (int)old_i;
+    for(j=0; j<new_width; j++){
+      double old_j = j*col_ratio;
+      double floor_j = (int)old_j;
+
+      double r = 0.0;
+      double g = 0.0;
+      double b = 0.0;
+      double weight = 0.0;
+
+      for(x=floor_i-2+1; x<=floor_i+2; x++){
+        for(y=floor_j-2+1; y<=floor_j+2; y++){
+          if((x<old_height)&&(y<old_width)&&(x>=0)&&(y>=0)){
+            double lanc_term = _L(old_i-x) * _L(old_j-y);
+            r += bitmap[x][y].r * lanc_term;
+            g += bitmap[x][y].g * lanc_term;
+            b += bitmap[x][y].b * lanc_term;
+            weight += lanc_term;
+          }
         }
       }
-      new_bitmap[i][j] = mean;
-      mean.r = 0;
-      mean.g = 0;
-      mean.b = 0;
+      r /= weight;
+      g /= weight;
+      b /= weight;
+
+      if((r < 0.0)||(r > 255.0)){
+        r = (r > 255.0) ? 255.0 : 0;
+      }
+      if((g < 0.0)||(g > 255.0)){
+        g = (g > 255.0) ? 255.0 : 0;
+      }
+      if((b < 0.0)||(b > 255.0)){
+        b = (b > 255.0) ? 255.0 : 0;
+      }
+
+      new_bitmap[i][j].r = r;
+      new_bitmap[i][j].g = g;
+      new_bitmap[i][j].b = b;
     }
   }
   return new_bitmap;
 }
 
-PIXELS **upsample_bitmap(PIXELS **bitmap, int new_height, int new_width,
-          int old_height, int old_width, int factor, int *error){
+double fast_sin(double var){
+  int loops = var/(2*E_PI);
+  var = var - loops*2*E_PI;
 
-  PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
-  if(new_bitmap == NULL){
-    return NULL;
+  if(var>E_PI){
+    var = E_PI - var;
+  }else if((-var)>E_PI){
+    var = -E_PI - var;
   }
 
-  int i,j,k,l;
-  unsigned char r,g,b;
-  for (i=0; i<new_height; i++){
-    for (j=0; j<new_width; j++){
-      r=0; g=0; b=0;
-
-      for(k=(i/factor)-factor+1; k<=(i/factor)+factor; k++){
-        for(l=(j/factor)-factor+1; l<=(j/factor)+factor; l++){
-          if((k<old_height)&&(l<old_width)&&(k>=0)&&(l>=0)){
-            r += bitmap[k][l].r * _L((i/factor)-k, factor) * _L((j/factor)-l, factor);
-            g += bitmap[k][l].g * _L((i/factor)-k, factor) * _L((j/factor)-l, factor);
-            b += bitmap[k][l].b * _L((i/factor)-k, factor) * _L((j/factor)-l, factor);
-          }
-        }
-      }
-      (r>255) ? (new_bitmap[i][j].r = 255) : (new_bitmap[i][j].r = r);
-      (g>255) ? (new_bitmap[i][j].g = 255) : (new_bitmap[i][j].g = g);
-      (b>255) ? (new_bitmap[i][j].b = 255) : (new_bitmap[i][j].b = b);
-    }
+  if(var<0){
+    var = -var;
+    return -(16.0*var*(E_PI - var))/(5.0*E_PI_SQ - 4.0*var*(E_PI - var));
+  }else{
+    return (16.0*var*(E_PI - var))/(5.0*E_PI_SQ - 4.0*var*(E_PI - var));
   }
-
-  return new_bitmap;
 }
 
 double sinc(double var){
   if(var == 0.0){
     return 1.0;
   }
-  return sin(M_PI*var)/(M_PI*var);
+  return fast_sin(E_PI*var)/(E_PI*var);
 }
 
-double _L(double var, int a){//Lanczos kernel
-  if(abs(var) >= 0 && abs(var) < a){
-    return sinc(var)*sinc(var/a);
+double _L(double var){//Lanczos kernel window size = 2
+  if(abs(var) < 2){
+    return sinc(var)*sinc(var/2.0);
   }
 
   return 0;
