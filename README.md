@@ -12,5 +12,5 @@ To use, simply copy bmp.c and bmp.h into your project and add them to the build.
 * Add rotations
 * Add refections
 * Generate histograms
-* Resize your images
+* Resize your images (Lanczos resampling)
 * More useful features
