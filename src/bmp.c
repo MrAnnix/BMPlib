@@ -48,7 +48,7 @@ SOFTWARE.
 /* Constant declarations                                                     */
 /*---------------------------------------------------------------------------*/
 
-#define NUM_ERROR_MSGS_BMP 4
+#define NUM_ERROR_MSGS_BMP 5
 
 #define E_PI    3.141592653589793238462643383279502884197169399375105820974
 #define E_PI_SQ 9.869604401089358618834490999876151135313699407240790626413
@@ -58,6 +58,7 @@ static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
     "Success",
     "Cannot load the file",
     "Cannot write into the file",
+    "Not supported format",
     "Unknown error"
   };
 
@@ -85,16 +86,16 @@ static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
 /* Static function prototypes                                                */
 /*---------------------------------------------------------------------------*/
 
-PIXELS **generate_bitmap(int new_height, int new_width, int *error);
+RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error);
 
-PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion,
+RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion,
           int *error);
 
-void free_bitmap(PIXELS **bitmap, int height);
+void free_bitmap(RGBTRIPLE **bitmap, int height);
 
 void call_gnuplot(char *csv_template, char *path, int *error);
 
-PIXELS **resample_bitmap(PIXELS **bitmap, int new_height, int new_width,
+RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width,
           int old_height, int old_width, int *error);
 
 double sinc(double var);
@@ -136,8 +137,8 @@ int is_BMP(char *path, int *error){
     return -1;
   }
   if(S_ISREG(info.st_mode)){
-    char bufferBM[2] = "\0";
-    int bufferSize = 0;
+    WORD bufferBM = 0x0000;
+    DWORD bufferSize = 0;
     FILE *fd;
 
     if((fd = fopen(abs_path, "r")) == NULL){
@@ -145,13 +146,13 @@ int is_BMP(char *path, int *error){
 			errno = 0;
   		return -1;
   	}
-    if(fread(bufferBM, sizeof(char), 2, fd) != 2){
+    if(fread(&bufferBM, sizeof(WORD), 1, fd) != 1){
       fclose(fd);
       *error = errno;
 			errno = 0;
       return -1;
     }
-    if(fread(&bufferSize, sizeof(int), 1, fd) != 4){
+    if(fread(&bufferSize, sizeof(DWORD), 1, fd) != 1){
       fclose(fd);
       *error = errno;
 			errno = 0;
@@ -159,7 +160,7 @@ int is_BMP(char *path, int *error){
     }
     fclose(fd);
 
-    if((!strcmp(bufferBM, "BM"))&&(bufferSize == info.st_size)){
+    if((bufferBM == 0x4D42) &&(bufferSize == info.st_size)){
       return 1;
     }
   }
@@ -184,7 +185,10 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
 	}
 
-  if(fread(image->fh.type, 2, 1, fd) != 1){
+  image->alignment = NULL;
+  image->bitmap = NULL;
+
+  if(fread(&image->fh.bfType, 2, 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -206,7 +210,18 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(image->fh.bfReserved, 4, 1, fd) != 1){
+  if(fread(&image->fh.bfReserved1, 2, 1, fd) != 1){
+    if(errno){
+      *error = errno;
+      errno = 0;
+    }else{
+      *error = CANNOT_LOAD;
+    }
+    fclose(fd);
+    return -1;
+  }
+
+  if(fread(&image->fh.bfReserved2, 2, 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -283,6 +298,12 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
+  if(image->ih.biBitCount != 24){//Not 24bit image
+    *error = NOT_SPT_FMT;
+    fclose(fd);
+    return -1;
+  }
+
   if(fread(&image->ih.biCompression, 4, 1, fd) != 1){
     if(errno){
       *error = errno;
@@ -290,6 +311,12 @@ int load_image(BMPFILE *image, char *path, int *error){
     }else{
       *error = CANNOT_LOAD;
     }
+    fclose(fd);
+    return -1;
+  }
+
+  if(image->ih.biCompression){//Compressed image
+    *error = NOT_SPT_FMT;
     fclose(fd);
     return -1;
   }
@@ -367,13 +394,13 @@ int load_image(BMPFILE *image, char *path, int *error){
     }
   }
 
-  image->padding = (4 - (image->ih.biWidth * sizeof(PIXELS)) % 4) % 4;
+  image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
 
-  image->bitmap = (PIXELS **)malloc(sizeof(PIXELS *)*image->ih.biHeight);
+  image->bitmap = malloc(sizeof(RGBTRIPLE *)*image->ih.biHeight);
   int i;
   for(i=0; i<image->ih.biHeight; i++){
-    image->bitmap[i] = (PIXELS*)malloc(sizeof(PIXELS)*image->ih.biWidth);
-    fread(image->bitmap[i], sizeof(PIXELS), image->ih.biWidth, fd);
+    image->bitmap[i] = malloc(sizeof(RGBTRIPLE)*image->ih.biWidth);
+    fread(image->bitmap[i], sizeof(RGBTRIPLE), image->ih.biWidth, fd);
     fseek(fd, image->padding, SEEK_CUR);
   }
 
@@ -387,12 +414,13 @@ void clean_image(BMPFILE *image){
   }
 
   int  i;
-  for(i=0; i<image->ih.biHeight; i++){
-    if(image->bitmap[i]!= NULL){
-      free(image->bitmap[i]);
-    }
-  }
+
   if(image->bitmap != NULL){
+    for(i=0; i<image->ih.biHeight; i++){
+      if(image->bitmap[i]!= NULL){
+        free(image->bitmap[i]);
+      }
+    }
     free(image->bitmap);
   }
 }
@@ -411,7 +439,7 @@ int save_image(BMPFILE *image, char *path, int *error){
 
   int i, k;
   for(i=0; i<image->ih.biHeight; ++i){
-    fwrite(image->bitmap[i], sizeof(PIXELS), image->ih.biWidth, fd);
+    fwrite(image->bitmap[i], sizeof(RGBTRIPLE), image->ih.biWidth, fd);
     for(k = 0; k < image->padding; k++){
       fputc(0, fd);
     }
@@ -438,7 +466,7 @@ void sepia(BMPFILE *image){
   }
 }
 
-void bitone(BMPFILE *image, PIXELS dark, PIXELS light, int threshold){
+void bitone(BMPFILE *image, RGBTRIPLE dark, RGBTRIPLE light, int threshold){
   int i,j;
   for(i=0; i<image->ih.biHeight; i++){
     for(j=0; j<image->ih.biWidth; j++){
@@ -454,7 +482,7 @@ void bitone(BMPFILE *image, PIXELS dark, PIXELS light, int threshold){
 
 void grayscale(BMPFILE *image, char rgby){
   int i,j;
-  unsigned char result;
+  BYTE result;
 
   switch (rgby){
     case 'r':
@@ -525,7 +553,7 @@ void mirror(BMPFILE *image, char hv, int *error){
 
     for(i=0; i<image->ih.biHeight; i++){
       for(j=0; j<image->ih.biWidth; j++){
-        memcpy(&image->bitmap[i][j], &aux.bitmap[i][w-j-1], sizeof(PIXELS));
+        memcpy(&image->bitmap[i][j], &aux.bitmap[i][w-j-1], sizeof(RGBTRIPLE));
       }
     }
   }else{
@@ -533,7 +561,7 @@ void mirror(BMPFILE *image, char hv, int *error){
 
     for(i=0; i<image->ih.biHeight; i++){
       for(j=0; j<image->ih.biWidth; j++){
-        memcpy(&image->bitmap[i][j], &aux.bitmap[h-1-i][j], sizeof(PIXELS));
+        memcpy(&image->bitmap[i][j], &aux.bitmap[h-1-i][j], sizeof(RGBTRIPLE));
       }
     }
   }
@@ -547,7 +575,7 @@ int rotate(BMPFILE *image, char motion, int *error){
   int new_XPelsPerMeter = image->ih.biYPelsPerMeter;
   int new_YPelsPerMeter = image->ih.biXPelsPerMeter;
 
-  PIXELS **new_im;
+  RGBTRIPLE **new_im;
 
   new_width = image->ih.biHeight;
   new_height = image->ih.biWidth;
@@ -565,7 +593,7 @@ int rotate(BMPFILE *image, char motion, int *error){
   image->ih.biXPelsPerMeter = new_XPelsPerMeter;
   image->ih.biYPelsPerMeter = new_YPelsPerMeter;
 
-  image->padding = (4-(image->ih.biWidth*sizeof(PIXELS))%4)%4;
+  image->padding = (4-(image->ih.biWidth*sizeof(RGBTRIPLE))%4)%4;
 
   int old_biSizeImage = image->ih.biSizeImage;
   image->ih.biSizeImage = image->ih.biHeight*(image->ih.biWidth*3+image->padding);
@@ -640,13 +668,19 @@ int bmpdup(BMPFILE *source, BMPFILE *dest, int *error){
   dest->ih = source->ih;
   dest->aligment_size = source->aligment_size;
   if(source->alignment){
-    dest->alignment = strdup(source->alignment);
+    dest->alignment = malloc(source->aligment_size);
+    if(errno){
+      *error = errno;
+      errno = 0;
+      return -1;
+    }
+    memcpy(dest->alignment, source->alignment, source->aligment_size);
   }else{
     dest->alignment = NULL;
   }
   dest->padding = source->padding;
   dest->bitmap = NULL;
-  dest->bitmap = (PIXELS **) malloc(sizeof(PIXELS *)*source->ih.biHeight);
+  dest->bitmap = malloc(sizeof(RGBTRIPLE *)*source->ih.biHeight);
   if(errno){
     if(dest->bitmap != NULL){
       free(dest->bitmap);
@@ -658,7 +692,7 @@ int bmpdup(BMPFILE *source, BMPFILE *dest, int *error){
   int i,j,a;
   for(a=0; a<source->ih.biHeight; a++){
     dest->bitmap[a] = NULL;
-    dest->bitmap[a] = (PIXELS*)malloc(sizeof(PIXELS)*source->ih.biWidth);
+    dest->bitmap[a] = malloc(sizeof(RGBTRIPLE)*source->ih.biWidth);
     if(errno){
       for(i=0; i<a; i++){
         if(dest->bitmap[i] != NULL){
@@ -690,7 +724,7 @@ int reduce(BMPFILE *image, int factor, int *error){
   int new_XPelsPerMeter = image->ih.biXPelsPerMeter/factor;
   int new_YPelsPerMeter = image->ih.biYPelsPerMeter/factor;
 
-  PIXELS **new_im;
+  RGBTRIPLE **new_im;
 
   new_im = resample_bitmap(image->bitmap, new_height, new_width,
                   image->ih.biHeight, image->ih.biWidth, error);
@@ -706,7 +740,7 @@ int reduce(BMPFILE *image, int factor, int *error){
   image->ih.biXPelsPerMeter = new_XPelsPerMeter;
   image->ih.biYPelsPerMeter = new_YPelsPerMeter;
 
-  image->padding = (4 - (image->ih.biWidth * sizeof(PIXELS)) % 4) % 4;
+  image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
 
   int old_biSizeImage = image->ih.biSizeImage;
   image->ih.biSizeImage = image->ih.biHeight * (image->ih.biWidth * 3
@@ -725,7 +759,7 @@ int enlarge(BMPFILE *image, int factor, int *error){
   int new_XPelsPerMeter = image->ih.biXPelsPerMeter*factor;
   int new_YPelsPerMeter = image->ih.biYPelsPerMeter*factor;
 
-  PIXELS **new_im;
+  RGBTRIPLE **new_im;
 
   new_im = resample_bitmap(image->bitmap, new_height, new_width,
                   image->ih.biHeight, image->ih.biWidth, error);
@@ -741,7 +775,7 @@ int enlarge(BMPFILE *image, int factor, int *error){
   image->ih.biXPelsPerMeter = new_XPelsPerMeter;
   image->ih.biYPelsPerMeter = new_YPelsPerMeter;
 
-  image->padding = (4 - (image->ih.biWidth * sizeof(PIXELS)) % 4) % 4;
+  image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
 
   int old_biSizeImage = image->ih.biSizeImage;
   image->ih.biSizeImage = image->ih.biHeight * (image->ih.biWidth * 3
@@ -758,10 +792,10 @@ int enlarge(BMPFILE *image, int factor, int *error){
 /* Static function definitions                                               */
 /*---------------------------------------------------------------------------*/
 
-PIXELS **generate_bitmap(int new_height, int new_width, int *error){
-  PIXELS **new_bitmap;
+RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error){
+  RGBTRIPLE **new_bitmap;
 
-  if((new_bitmap = malloc(new_height * sizeof(PIXELS *))) == NULL){
+  if((new_bitmap = malloc(new_height * sizeof(RGBTRIPLE *))) == NULL){
     *error = errno;
     errno = 0;
     return NULL;
@@ -770,7 +804,7 @@ PIXELS **generate_bitmap(int new_height, int new_width, int *error){
   int i,a;
   for(i=0; i<new_height; i++){
     new_bitmap[i] = NULL;
-    new_bitmap[i] = malloc(new_width * sizeof(PIXELS *));
+    new_bitmap[i] = malloc(new_width * sizeof(RGBTRIPLE *));
     if(new_bitmap[i] == NULL){
       for(a=0; a<i; a++){
         if(new_bitmap[a] != NULL){
@@ -784,12 +818,12 @@ PIXELS **generate_bitmap(int new_height, int new_width, int *error){
       errno = 0;
       return NULL;
     }
-    memset(new_bitmap[i], 0, new_width * sizeof(PIXELS *));
+    memset(new_bitmap[i], 0, new_width * sizeof(RGBTRIPLE *));
   }
   return new_bitmap;
 }
 
-void free_bitmap(PIXELS **bitmap, int height){
+void free_bitmap(RGBTRIPLE **bitmap, int height){
   int i;
   for(i=0; i<height; i++){
     if(bitmap[i] != NULL){
@@ -801,12 +835,12 @@ void free_bitmap(PIXELS **bitmap, int height){
   }
 }
 
-PIXELS **rotate_bitmap(PIXELS **bitmap, int height, int width, char motion,
+RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion,
           int *error){
   int new_width = height;
   int new_height = width;
 
-  PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
+  RGBTRIPLE **new_bitmap = generate_bitmap(new_height, new_width, error);
   if(new_bitmap == NULL){
     return NULL;
   }
@@ -869,10 +903,10 @@ void call_gnuplot(char *csv_template, char *path, int *error){
   }
 }
 
-PIXELS **resample_bitmap(PIXELS **bitmap, int new_height, int new_width,
+RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width,
           int old_height, int old_width, int *error){
 
-  PIXELS **new_bitmap = generate_bitmap(new_height, new_width, error);
+  RGBTRIPLE **new_bitmap = generate_bitmap(new_height, new_width, error);
   if(new_bitmap == NULL){
     return NULL;
   }

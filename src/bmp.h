@@ -34,6 +34,8 @@ SOFTWARE.
 ******************************************************************************/
 #ifndef BMP_H
 #define BMP_H
+
+#include <stdint.h>
 /*---------------------------------------------------------------------------*/
 /* Constant declarations                                                     */
 /*---------------------------------------------------------------------------*/
@@ -41,46 +43,60 @@ SOFTWARE.
 #define SUCCESS_INPUT 0
 #define CANNOT_LOAD -1
 #define CANNOT_WRITE -2
-#define UNKNOWN -3
+#define NOT_SPT_FMT -3
+#define UNKNOWN -4
 
 /*---------------------------------------------------------------------------*/
 /* Type declarations                                                         */
 /*---------------------------------------------------------------------------*/
 
-typedef struct __attribute__((__packed__)){
-  unsigned char b;
-  unsigned char g;
-  unsigned char r;
-}PIXELS;
+typedef uint8_t  BYTE;
+typedef uint16_t WORD;
+typedef uint32_t DWORD;
+typedef int32_t  LONG;
 
 typedef struct __attribute__((__packed__)){
-  char type[2]; // Should be "BM"
-  int bfSize;  // 4 bytes with the size
-  char bfReserved[4]; // 4 bytes reserved
-  int bfOffBits; // offset where the pixel array can be found
+  BYTE b; // Blue channel
+  BYTE g; // Green channel
+  BYTE r; // Red channel
+}RGBTRIPLE;
+
+typedef struct __attribute__((__packed__)){
+  BYTE b; // Blue channel
+  BYTE g; // Green channel
+  BYTE r; // Red channel
+  BYTE a; // Reserved for alpha channel
+}RGBQUAD;
+
+typedef struct __attribute__((__packed__)){
+  WORD bfType; // Should be "BM"
+  DWORD bfSize;  // 4 bytes with the size
+  WORD bfReserved1; // 2 bytes reserved
+  WORD bfReserved2; // 2 bytes reserved
+  DWORD bfOffBits; // offset where the pixel array can be found
 }BITMAPFILEHEADER, *PBITMAPFILEHEADER;
 
 typedef struct __attribute__((__packed__)){
-  int biSize;  // size of the DIB header from this point
-  int  biWidth; // width in pixels
-  int  biHeight; //height in pixels
-  short  biPlanes; // number of planes
-  short  biBitCount; // number of bits per pixel
-  int biCompression; // if compression BI_RGB = 0 ó BI_BITFIELDS = 3
-  int biSizeImage; // size of the array data including padding
-  int biXPelsPerMeter; // hor resolution of the image
-  int  biYPelsPerMeter; // ver resoilution of the image
-  int biClrUsed; // number of colours in the palette, 0 if it uses all
-  int biClrImportant; // number of important colours, 0 if all are imp
+  DWORD biSize;  // size of the DIB header from this point
+  LONG  biWidth; // width in pixels
+  LONG  biHeight; //height in pixels
+  WORD  biPlanes; // number of planes
+  WORD  biBitCount; // number of bits per pixel
+  DWORD biCompression; // if compression BI_RGB = 0 ó BI_BITFIELDS = 3
+  DWORD biSizeImage; // size of the array data including padding
+  LONG biXPelsPerMeter; // hor resolution of the image
+  LONG  biYPelsPerMeter; // ver resoilution of the image
+  DWORD biClrUsed; // number of colours in the palette, 0 if it uses all
+  DWORD biClrImportant; // number of important colours, 0 if all are imp
 } BITMAPINFOHEADER, *PBITMAPINFOHEADER;
 
 typedef struct image{
   BITMAPFILEHEADER fh;
   BITMAPINFOHEADER ih;
-  int aligment_size;
-  char *alignment; // characters between header and pixel map
-  unsigned int padding; // row padding within the pixel map
-  PIXELS **bitmap; // BITMAP multidimensional array
+  size_t aligment_size;
+  BYTE *alignment; // characters between header and pixel map
+  DWORD padding; // row padding within the pixel map
+  RGBTRIPLE **bitmap; // BITMAP multidimensional array
 }BMPFILE;
 
 /*---------------------------------------------------------------------------*/
@@ -192,7 +208,7 @@ void sepia(BMPFILE *image);
 
 ******************************************************************************/
 
-void bitone(BMPFILE *image, PIXELS dark, PIXELS light, int threshold);
+void bitone(BMPFILE *image, RGBTRIPLE dark, RGBTRIPLE light, int threshold);
 
 /**grayscale*******************************************************************
 
