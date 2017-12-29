@@ -188,7 +188,7 @@ int load_image(BMPFILE *image, char *path, int *error){
   image->alignment = NULL;
   image->bitmap = NULL;
 
-  if(fread(&image->fh.bfType, 2, 1, fd) != 1){
+  if(fread(&image->fh.bfType, sizeof(WORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -199,7 +199,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->fh.bfSize, 4, 1, fd) != 1){
+  if(fread(&image->fh.bfSize, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -210,7 +210,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->fh.bfReserved1, 2, 1, fd) != 1){
+  if(fread(&image->fh.bfReserved1, sizeof(WORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -221,7 +221,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->fh.bfReserved2, 2, 1, fd) != 1){
+  if(fread(&image->fh.bfReserved2, sizeof(WORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -232,7 +232,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->fh.bfOffBits, 4, 1, fd) != 1){
+  if(fread(&image->fh.bfOffBits, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -243,7 +243,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biSize, 4, 1, fd) != 1){
+  if(fread(&image->ih.biSize, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -254,7 +254,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biWidth, 4, 1, fd) != 1){
+  if(fread(&image->ih.biWidth, sizeof(LONG), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -265,7 +265,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biHeight, 4, 1, fd) != 1){
+  if(fread(&image->ih.biHeight, sizeof(LONG), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -276,7 +276,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biPlanes, 2, 1, fd) != 1){
+  if(fread(&image->ih.biPlanes, sizeof(WORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -287,7 +287,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biBitCount, 2, 1, fd) != 1){
+  if(fread(&image->ih.biBitCount, sizeof(WORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -304,7 +304,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biCompression, 4, 1, fd) != 1){
+  if(fread(&image->ih.biCompression, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -321,7 +321,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biSizeImage, 4, 1, fd) != 1){
+  if(fread(&image->ih.biSizeImage, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -332,7 +332,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biXPelsPerMeter, 4, 1, fd) != 1){
+  if(fread(&image->ih.biXPelsPerMeter, sizeof(LONG), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -343,7 +343,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biYPelsPerMeter, 4, 1, fd) != 1){
+  if(fread(&image->ih.biYPelsPerMeter, sizeof(LONG), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -354,7 +354,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biClrUsed, 4, 1, fd) != 1){
+  if(fread(&image->ih.biClrUsed, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -365,7 +365,7 @@ int load_image(BMPFILE *image, char *path, int *error){
     return -1;
   }
 
-  if(fread(&image->ih.biClrImportant, 4, 1, fd) != 1){
+  if(fread(&image->ih.biClrImportant, sizeof(DWORD), 1, fd) != 1){
     if(errno){
       *error = errno;
       errno = 0;
@@ -593,7 +593,7 @@ int rotate(BMPFILE *image, char motion, int *error){
   image->ih.biXPelsPerMeter = new_XPelsPerMeter;
   image->ih.biYPelsPerMeter = new_YPelsPerMeter;
 
-  image->padding = (4-(image->ih.biWidth*sizeof(RGBTRIPLE))%4)%4;
+  image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
 
   int old_biSizeImage = image->ih.biSizeImage;
   image->ih.biSizeImage = image->ih.biHeight*(image->ih.biWidth*3+image->padding);

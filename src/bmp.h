@@ -62,13 +62,6 @@ typedef struct __attribute__((__packed__)){
 }RGBTRIPLE;
 
 typedef struct __attribute__((__packed__)){
-  BYTE b; // Blue channel
-  BYTE g; // Green channel
-  BYTE r; // Red channel
-  BYTE a; // Reserved for alpha channel
-}RGBQUAD;
-
-typedef struct __attribute__((__packed__)){
   WORD bfType; // Should be "BM"
   DWORD bfSize;  // 4 bytes with the size
   WORD bfReserved1; // 2 bytes reserved
