@@ -40,6 +40,7 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <math.h>
 #include <errno.h>
 
 #include "bmp.h"
@@ -605,12 +606,12 @@ int rotate(BMPFILE *image, char motion, int *error){
 }
 
 int generate_histogram(BMPFILE *image, char *path, int *error){
-  unsigned int histo_r[255];
-  unsigned int histo_g[255];
-  unsigned int histo_b[255];
-  memset(histo_r, 0, sizeof(int)*256);//clean the arrays
-  memset(histo_g, 0, sizeof(int)*256);
-  memset(histo_b, 0, sizeof(int)*256);
+  unsigned int histo_r[256];
+  unsigned int histo_g[256];
+  unsigned int histo_b[256];
+  memset(histo_r, 0, sizeof(int)*255);//clean the arrays
+  memset(histo_g, 0, sizeof(int)*255);
+  memset(histo_b, 0, sizeof(int)*255);
 
   int r,g,b;
   r = 0; g = 0; b = 0;
@@ -987,7 +988,7 @@ double sinc(double var){
 }
 
 double _L(double var){//Lanczos kernel window size = 2
-  if(abs(var) < 2){
+  if(fabs(var) < 2){
     return sinc(var)*sinc(var/2.0);
   }
 
