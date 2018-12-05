@@ -62,6 +62,13 @@ typedef struct __attribute__((__packed__)){
 }RGBTRIPLE;
 
 typedef struct __attribute__((__packed__)){
+    BYTE b; // Blue channel
+    BYTE g; // Green channel
+    BYTE r; // Red channel
+    BYTE a; // Alpha channel
+}RGBQUAD;
+
+typedef struct __attribute__((__packed__)){
   WORD bfType; // Should be "BM"
   DWORD bfSize;  // 4 bytes with the size
   WORD bfReserved1; // 2 bytes reserved
@@ -115,8 +122,6 @@ typedef struct image{
 
   Resume       Check if the file at path is a valid BMP file
 
-  Description  [opcional]
-
   Parameters   -path: String with the path of the file.
 
   Colat. Effe. Return 1 if valid, 0 if not and -1 if there is a problem. error
@@ -146,7 +151,7 @@ const char *get_error_msg_bmp(int error);
   Description  Loads to memory the image in path. Writes in image pointer the
               direction of the image loaded.
 
-  Parameters   [opcional]
+  Parameters   [pointer to an error variable]
 
   Colat. Effe. It is allocated in dinamic mem. so,
               it can and must be freed with clean_image function. Also if there

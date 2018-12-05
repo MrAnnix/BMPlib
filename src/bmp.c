@@ -52,6 +52,7 @@ SOFTWARE.
 #define NUM_ERROR_MSGS_BMP 5
 
 #define E_PI    3.141592653589793238462643383279502884197169399375105820974
+#define E_TAU   6.283185307179586476925286766559005768394338798750211641950
 #define E_PI_SQ 9.869604401089358618834490999876151135313699407240790626413
 
 static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
@@ -963,13 +964,10 @@ RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width,
 }
 
 double fast_sin(double var){
-  int loops = var/(2*E_PI);
-  var = var - loops*2*E_PI;
+  var = var%E_TAU;
 
   if(var>E_PI){
     var = E_PI - var;
-  }else if((-var)>E_PI){
-    var = -E_PI - var;
   }
 
   if(var<0){
