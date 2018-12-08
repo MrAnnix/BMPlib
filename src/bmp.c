@@ -964,10 +964,13 @@ RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width,
 }
 
 double fast_sin(double var){
-  var = var%E_TAU;
+  int loops = var/(E_TAU);
+  var = var - loops*E_TAU;
 
   if(var>E_PI){
     var = E_PI - var;
+  }else if((-var)>E_PI){
+    var = -E_PI - var;
   }
 
   if(var<0){
