@@ -54,7 +54,6 @@ typedef uint8_t  BYTE;
 typedef uint16_t WORD;
 typedef uint32_t DWORD;
 typedef int32_t  LONG;
-typedef unsigned char uchar;
 
 typedef struct __attribute__((__packed__)){
   BYTE b; // Blue channel
@@ -323,21 +322,22 @@ int enlarge(BMPFILE *image, int factor, int *error);
 
 /**crop***********************************************************************
 
-  Resume       Cut the image given two points
+  Resume       Cut the image given two points **in percentage**.
 
-  Description  Given two points: (x1,y1) and (x2,y2) [in percentage] preserves the bitmap
-            defined by this rectangle. (x1,y1) must be the upper left corner,
-            and (x2,y2) must be the lower rigth corner.
+  Description  Given two points **in percentage**: (x1,y1) and (x2,y2) preserves
+            the bitmap defined by this rectangle. (x1,y1) must be the upper left
+            corner, and (x2,y2) must be the lower rigth corner.
                If there is an error, the corresponding variable will be set
-               properly and the function will return -1.
+            properly and the function will return -1.
 
-  Colat. Effe. Return the new image in the pointer from the original image
+  Colat. Effe. Return the new image in the pointer from the original image.
 
   See also    d
 
 ******************************************************************************/
 
-int crop(BMPFILE *image, uchar x1, uchar y1, uchar x2, uchar y2, int *error);
+int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
+        , unsigned char x_2, unsigned char y_2, int *error);
 
 /**Function*******************************************************************
 

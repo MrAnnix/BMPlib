@@ -89,15 +89,15 @@ static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
 
 RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error);
 
-RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion,
-          int *error);
+RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion
+          , int *error);
 
 void free_bitmap(RGBTRIPLE **bitmap, int height);
 
 void call_gnuplot(char *csv_template, char *path, int *error);
 
-RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width,
-          int old_height, int old_width, int *error);
+RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width
+          , int old_height, int old_width, int *error);
 
 double sinc(double var);
 
@@ -599,7 +599,8 @@ int rotate(BMPFILE *image, char motion, int *error){
   image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
 
   int old_biSizeImage = image->ih.biSizeImage;
-  image->ih.biSizeImage = image->ih.biHeight*(image->ih.biWidth*3+image->padding);
+  image->ih.biSizeImage = image->ih.biHeight*(image->ih.biWidth*3
+        +image->padding);
 
   image->fh.bfSize = image->fh.bfSize + image->ih.biSizeImage - old_biSizeImage;
 
@@ -791,7 +792,9 @@ int enlarge(BMPFILE *image, int factor, int *error){
   return 0;
 }
 
-int crop(BMPFILE *image, uchar x_1, uchar y_1, uchar x_2, uchar y_2, int *error){
+int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
+        , unsigned char x_2, unsigned char y_2, int *error){
+
   if((x_1>=x_2)||(y_1>=y_2)||(x_2>100)||(y_2>100)){
     *error = UNKNOWN;
     return -1;
@@ -821,7 +824,6 @@ int crop(BMPFILE *image, uchar x_1, uchar y_1, uchar x_2, uchar y_2, int *error)
 
   image->ih.biWidth = new_width;
   image->ih.biHeight = new_height;
-  printf("%d %d\n", image->ih.biWidth, image->ih.biHeight);
   image->ih.biXPelsPerMeter
       = image->ih.biXPelsPerMeter*(image->ih.biWidth/new_width);
   image->ih.biYPelsPerMeter
@@ -887,8 +889,8 @@ void free_bitmap(RGBTRIPLE **bitmap, int height){
   }
 }
 
-RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion,
-          int *error){
+RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion
+        , int *error){
   int new_width = height;
   int new_height = width;
 
@@ -923,7 +925,8 @@ void call_gnuplot(char *csv_template, char *path, int *error){
   }
 
   fprintf(fd, "set xrange [0:255]\n");
-  fprintf(fd, "plot for [COL=2:4] inputfile using COL title columnheader with lines\n");
+  fprintf(fd, "plot for [COL=2:4] inputfile using COL title columnheader with");
+  fprintf(fd, " lines\n");
   fprintf(fd, "set terminal png\n");
   fprintf(fd, "set output outputfile\n");
   fprintf(fd, "replot\n");
@@ -940,7 +943,8 @@ void call_gnuplot(char *csv_template, char *path, int *error){
   int status = 0;
   pid_t fk = fork();
   if(fk == 0){
-    execl("/usr/bin/gnuplot", "gnuplot", "-e", f_argument, "-e", s_argument, script, NULL);
+    execl("/usr/bin/gnuplot", "gnuplot", "-e", f_argument, "-e", s_argument
+            , script, NULL);
   }else{
     wait(&status);
   }
@@ -955,8 +959,8 @@ void call_gnuplot(char *csv_template, char *path, int *error){
   }
 }
 
-RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width,
-          int old_height, int old_width, int *error){
+RGBTRIPLE **resample_bitmap(RGBTRIPLE **bitmap, int new_height, int new_width
+        , int old_height, int old_width, int *error){
 
   RGBTRIPLE **new_bitmap = generate_bitmap(new_height, new_width, error);
   if(new_bitmap == NULL){
