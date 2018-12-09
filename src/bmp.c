@@ -449,6 +449,17 @@ int save_image(BMPFILE *image, char *path, int *error){
   return 0;
 }
 
+void zero(BMPFILE *image, int mask){
+  int i,j;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      image->bitmap[i][j].b &=  mask      & 0xFF;
+      image->bitmap[i][j].g &= (mask>>8)  & 0xFF;
+      image->bitmap[i][j].r &= (mask>>16) & 0xFF;
+    }
+  }
+}
+
 void sepia(BMPFILE *image){
   int i,j,r,g,b;
   for(i=0; i<image->ih.biHeight; i++){

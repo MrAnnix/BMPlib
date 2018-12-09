@@ -186,9 +186,24 @@ void clean_image(BMPFILE *image);
 
 int save_image(BMPFILE *image, char *path, int *error);
 
+/**zero************************************************************************
+
+  Resume       Put one (or more) channel of the bitmap to zero
+
+******************************************************************************/
+
+void zero(BMPFILE *image, int mask);
+
 /**sepia*******************************************************************
 
   Resume       Gives to the bitmap a sepia tone.
+
+  Parameters   [BMP file], [mask]
+               mask: 0xXXRRGGBB
+                     0xXX00XXXX -> Red to 0
+                     0xXXXX00XX -> Green to 0
+                     0xXXXXXX00 -> Blue to 0
+                     For example: 0xXXFF0000 -> Green and Blue to 0
 
 ******************************************************************************/
 
