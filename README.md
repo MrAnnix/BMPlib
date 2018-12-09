@@ -9,6 +9,7 @@ To use, simply copy bmp.c and bmp.h into your project and add them to the build.
 * Put one (or more) channel(s) to 0
 * Add sepia tone
 * Converts to grayscale
+* Segmentation of image (Otsu's Method)
 * Set to bitonal
 * Add rotations
 * Add refections
