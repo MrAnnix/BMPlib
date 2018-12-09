@@ -249,6 +249,8 @@ void chroma(BMPFILE *image, int angle);
             If the sum is greater or equal than the threshold, it must copy the
             value of the PIXELS light.
 
+  see also https://en.wikipedia.org/wiki/HSL_and_HSV
+
 ******************************************************************************/
 
 void bitone(BMPFILE *image, RGBTRIPLE dark, RGBTRIPLE light, int threshold);
