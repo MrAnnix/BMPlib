@@ -6,6 +6,7 @@ To use, simply copy bmp.c and bmp.h into your project and add them to the build.
 ### Features:
 * Load BMP files to memory (Only 24-bit without compression for the moment)
 * Check if a file is BMP
+* Put one (or more) channel(s) to 0
 * Add sepia tone
 * Converts to grayscale
 * Set to bitonal
