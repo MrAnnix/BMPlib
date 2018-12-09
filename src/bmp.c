@@ -37,6 +37,7 @@ SOFTWARE.
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -87,6 +88,10 @@ static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
 /* Static function prototypes                                                */
 /*---------------------------------------------------------------------------*/
 
+void RGBtoHSV(float r, float g, float b, float* h, float* s, float* v);
+
+void HSVtoRGB(float h, float s, float v, float *r, float *g, float *b);
+
 RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error);
 
 RGBTRIPLE **rotate_bitmap(RGBTRIPLE **bitmap, int height, int width, char motion
@@ -104,6 +109,10 @@ double sinc(double var);
 double _L(double var);
 
 double fast_sin(double var);
+
+double d_max(int n_args, double  a, double b, ...);
+
+double d_min(int n_args, double  a, double b, ...);
 
 /*---------------------------------------------------------------------------*/
 /* Function definitions                                                      */
@@ -474,6 +483,79 @@ void sepia(BMPFILE *image){
       (r>255) ? (image->bitmap[i][j].r = 255) : (image->bitmap[i][j].r = r);
       (g>255) ? (image->bitmap[i][j].g = 255) : (image->bitmap[i][j].g = g);
       (b>255) ? (image->bitmap[i][j].b = 255) : (image->bitmap[i][j].b = b);
+    }
+  }
+}
+
+void saturation(BMPFILE *image, int contrast_p){
+  double contrast_d = ((double)contrast_p)/100.0;
+
+  int i,j;
+  float r,g,b,h,s,v;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      r = ((double)image->bitmap[i][j].r)/255.0;
+      g = ((double)image->bitmap[i][j].g)/255.0;
+      b = ((double)image->bitmap[i][j].b)/255.0;
+
+      RGBtoHSV(r, g, b, &h, &s, &v);
+      if((s *= contrast_d)>1.0){
+        s = 1.0;
+      }
+      HSVtoRGB(h, s, v, &r, &g, &b);
+
+      image->bitmap[i][j].r = (BYTE)(r*255.0);
+      image->bitmap[i][j].g = (BYTE)(g*255.0);
+      image->bitmap[i][j].b = (BYTE)(b*255.0);
+    }
+  }
+}
+
+void brightness(BMPFILE *image, int bright){
+  double bright_d = ((double)bright)/100.0;
+
+  int i,j;
+  float r,g,b,h,s,v;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      r = ((double)image->bitmap[i][j].r)/255.0;
+      g = ((double)image->bitmap[i][j].g)/255.0;
+      b = ((double)image->bitmap[i][j].b)/255.0;
+
+      RGBtoHSV(r, g, b, &h, &s, &v);
+      if((v *= bright_d)>1.0){
+        v = 1.0;
+      }
+      HSVtoRGB(h, s, v, &r, &g, &b);
+
+      image->bitmap[i][j].r = (BYTE)(r*255.0);
+      image->bitmap[i][j].g = (BYTE)(g*255.0);
+      image->bitmap[i][j].b = (BYTE)(b*255.0);
+    }
+  }
+}
+
+void chroma(BMPFILE *image, int angle){
+  int i,j;
+  float r,g,b,h,s,v;
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      r = ((double)image->bitmap[i][j].r)/255.0;
+      g = ((double)image->bitmap[i][j].g)/255.0;
+      b = ((double)image->bitmap[i][j].b)/255.0;
+
+      RGBtoHSV(r, g, b, &h, &s, &v);
+
+      h+=angle;
+
+      int loops = ((int)h)/360;
+      h = h - ((double)loops)*360.0;
+
+      HSVtoRGB(h, s, v, &r, &g, &b);
+
+      image->bitmap[i][j].r = (BYTE)(r*255.0);
+      image->bitmap[i][j].g = (BYTE)(g*255.0);
+      image->bitmap[i][j].b = (BYTE)(b*255.0);
     }
   }
 }
@@ -857,6 +939,87 @@ int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
 /* Static function definitions                                               */
 /*---------------------------------------------------------------------------*/
 
+void RGBtoHSV(float r, float g, float b, float* h, float* s, float* v){
+	float min, max, delta;
+	min = d_min(3, r, g, b);
+	max = d_max(3, r, g, b);
+  delta = max - min;
+  //V
+	*v = max;
+  //S
+	if(max != 0){
+		*s = delta / max;
+	}else{
+    *s = 0;
+		*h = -1;
+		return;
+	}
+  //H
+	if(r == max){
+		*h = (g - b)/delta;
+	}else if(g == max){
+		*h = 2 + (b - r)/delta;
+	}else{
+		*h = 4 + (r - g)/delta;
+  }
+  *h *= 60;
+	if(*h < 0){
+		*h += 360;
+  }
+}
+
+void HSVtoRGB(float h, float s, float v, float *r, float *g, float *b){
+	int i;
+	float f, p, q, t;
+	if(s == 0) {
+		*r = *g = *b = v;
+		return;
+	}
+	h /= 60;
+	i = h;
+	f = h - i;
+	p = v*(1 - s);
+	q = v*(1 - s*f);
+	t = v*(1 - s*(1 - f));
+	switch(i){
+    case 0:
+			*r = v;
+			*g = t;
+			*b = p;
+		  break;
+
+		case 1:
+			*r = q;
+			*g = v;
+			*b = p;
+      break;
+
+		case 2:
+			*r = p;
+			*g = v;
+			*b = t;
+			break;
+
+		case 3:
+			*r = p;
+			*g = q;
+			*b = v;
+			break;
+
+		case 4:
+			*r = t;
+			*g = p;
+			*b = v;
+			break;
+
+		default:
+			*r = v;
+			*g = p;
+			*b = q;
+			break;
+	}
+}
+
 RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error){
   RGBTRIPLE **new_bitmap;
 
@@ -1058,4 +1221,54 @@ double _L(double var){//Lanczos kernel window size = 2
     return sinc(var)*sinc(var/2.0);
   }
   return 0;
+}
+
+double d_max(int n_args, double  a, double b, ...){
+  n_args -= 2;
+  double maximum, aux;
+
+  if(a > b){
+    maximum = a;
+  }else{
+    maximum = b;
+  }
+
+  va_list numbers;
+  va_start (numbers, b);
+
+  int i;
+  for(i=0; i<n_args; i++){
+    aux = va_arg (numbers, double);
+    if(aux > maximum){
+      maximum = aux;
+    }
+  }
+
+  va_end (numbers);
+  return maximum;
+}
+
+double d_min(int n_args, double  a, double b, ...){
+  n_args -= 2;
+  double minimum, aux;
+
+  if(a < b){
+    minimum = a;
+  }else{
+    minimum = b;
+  }
+
+  va_list numbers;
+  va_start (numbers, b);
+
+  int i;
+  for(i=0; i<n_args; i++){
+    aux = va_arg (numbers, double);
+    if(aux < minimum){
+      minimum = aux;
+    }
+  }
+
+  va_end (numbers);
+  return minimum;
 }

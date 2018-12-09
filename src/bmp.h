@@ -209,7 +209,37 @@ void zero(BMPFILE *image, int mask);
 
 void sepia(BMPFILE *image);
 
-/**grayscale*******************************************************************
+/**contrast********************************************************************
+
+  Resume       Change the relative saturation of the image.
+
+  Parameters   [image_file, contrast (in percentage)]
+
+******************************************************************************/
+
+void saturation(BMPFILE *image, int contrast_p);
+
+/**brightness******************************************************************
+
+  Resume       Change the relative brightness of the image.
+
+  Parameters   [image_file, brightness  (in percentage)]
+
+******************************************************************************/
+
+void brightness(BMPFILE *image, int bright);
+
+/**chroma*********************************************************************
+
+  Resume       Change the colour of the image.
+
+  Parameters   [image_file, chroma  (in degrees)]
+
+******************************************************************************/
+
+void chroma(BMPFILE *image, int angle);
+
+/**bitone**********************************************************************
 
   Resume       Converts the bitmap the image to bitonal.
 
