@@ -40,7 +40,6 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <math.h>
 #include <errno.h>
 
 #include "bmp.h"
@@ -398,7 +397,7 @@ int load_image(BMPFILE *image, char *path, int *error){
 
   image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
 
-  image->bitmap = malloc(sizeof(RGBTRIPLE *)*image->ih.biHeight);
+  image->bitmap = malloc(sizeof(RGBTRIPLE*)*image->ih.biHeight);
   int i;
   for(i=0; i<image->ih.biHeight; i++){
     image->bitmap[i] = malloc(sizeof(RGBTRIPLE)*image->ih.biWidth);
@@ -558,7 +557,7 @@ void mirror(BMPFILE *image, char hv, int *error){
         memcpy(&image->bitmap[i][j], &aux.bitmap[i][w-j-1], sizeof(RGBTRIPLE));
       }
     }
-  }else{
+  }else if(hv == 'h'){
     int h = image->ih.biHeight;
 
     for(i=0; i<image->ih.biHeight; i++){
@@ -566,6 +565,8 @@ void mirror(BMPFILE *image, char hv, int *error){
         memcpy(&image->bitmap[i][j], &aux.bitmap[h-1-i][j], sizeof(RGBTRIPLE));
       }
     }
+  }else{
+    *error = UNKNOWN;
   }
 
   clean_image(&aux);
@@ -761,7 +762,7 @@ int enlarge(BMPFILE *image, int factor, int *error){
   int new_XPelsPerMeter = image->ih.biXPelsPerMeter*factor;
   int new_YPelsPerMeter = image->ih.biYPelsPerMeter*factor;
 
-  RGBTRIPLE **new_im;
+  RGBTRIPLE **new_im = NULL;
 
   new_im = resample_bitmap(image->bitmap, new_height, new_width,
                   image->ih.biHeight, image->ih.biWidth, error);
@@ -790,6 +791,55 @@ int enlarge(BMPFILE *image, int factor, int *error){
   return 0;
 }
 
+int crop(BMPFILE *image, uchar x_1, uchar y_1, uchar x_2, uchar y_2, int *error){
+  if((x_1>=x_2)||(y_1>=y_2)||(x_2>100)||(y_2>100)){
+    *error = UNKNOWN;
+    return -1;
+  }
+
+  int x1 = (image->ih.biWidth*x_1)/100;
+  int x2 = (image->ih.biWidth*x_2)/100;
+  int y1 = (image->ih.biHeight*y_1)/100;
+  int y2 = (image->ih.biHeight*y_2)/100;
+
+  uint new_width = x2-x1;
+  uint new_height = y2-y1;
+
+  RGBTRIPLE** new_bitmap = NULL;
+  if(!(new_bitmap = generate_bitmap(new_height, new_width, error))){
+    return -1;
+  }
+
+  int i,j;
+  for(i=0; i<new_height; ++i){
+    for(j=0; j<new_width; ++j){
+      new_bitmap[i][j] = image->bitmap[i+x1][j+y1];
+    }
+  }
+
+  free_bitmap(image->bitmap, image->ih.biHeight);
+
+  image->ih.biWidth = new_width;
+  image->ih.biHeight = new_height;
+  printf("%d %d\n", image->ih.biWidth, image->ih.biHeight);
+  image->ih.biXPelsPerMeter
+      = image->ih.biXPelsPerMeter*(image->ih.biWidth/new_width);
+  image->ih.biYPelsPerMeter
+      = image->ih.biYPelsPerMeter*(image->ih.biHeight/new_height);
+
+  image->padding = (4 - (image->ih.biWidth * sizeof(RGBTRIPLE)) % 4) % 4;
+
+  int old_biSizeImage = image->ih.biSizeImage;
+  image->ih.biSizeImage = image->ih.biHeight * (image->ih.biWidth * 3
+      + image->padding);
+
+  image->fh.bfSize = image->fh.bfSize + image->ih.biSizeImage
+      - old_biSizeImage;
+
+  image->bitmap = new_bitmap;
+  return 0;
+}
+
 /*---------------------------------------------------------------------------*/
 /* Static function definitions                                               */
 /*---------------------------------------------------------------------------*/
@@ -797,7 +847,7 @@ int enlarge(BMPFILE *image, int factor, int *error){
 RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error){
   RGBTRIPLE **new_bitmap;
 
-  if((new_bitmap = malloc(new_height * sizeof(RGBTRIPLE *))) == NULL){
+  if((new_bitmap = malloc(new_height * sizeof(RGBTRIPLE*))) == NULL){
     *error = errno;
     errno = 0;
     return NULL;
@@ -806,7 +856,7 @@ RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error){
   int i,a;
   for(i=0; i<new_height; i++){
     new_bitmap[i] = NULL;
-    new_bitmap[i] = malloc(new_width * sizeof(RGBTRIPLE *));
+    new_bitmap[i] = malloc(new_width * sizeof(RGBTRIPLE));
     if(new_bitmap[i] == NULL){
       for(a=0; a<i; a++){
         if(new_bitmap[a] != NULL){
@@ -820,7 +870,7 @@ RGBTRIPLE **generate_bitmap(int new_height, int new_width, int *error){
       errno = 0;
       return NULL;
     }
-    memset(new_bitmap[i], 0, new_width * sizeof(RGBTRIPLE *));
+    memset(new_bitmap[i], 0, new_width * sizeof(RGBTRIPLE));
   }
   return new_bitmap;
 }
@@ -989,9 +1039,8 @@ double sinc(double var){
 }
 
 double _L(double var){//Lanczos kernel window size = 2
-  if(fabs(var) < 2){
+  if((var < 2)&&(var > -2)){
     return sinc(var)*sinc(var/2.0);
   }
-
   return 0;
 }

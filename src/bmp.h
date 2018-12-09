@@ -54,6 +54,7 @@ typedef uint8_t  BYTE;
 typedef uint16_t WORD;
 typedef uint32_t DWORD;
 typedef int32_t  LONG;
+typedef unsigned char uchar;
 
 typedef struct __attribute__((__packed__)){
   BYTE b; // Blue channel
@@ -62,17 +63,17 @@ typedef struct __attribute__((__packed__)){
 }RGBTRIPLE;
 
 typedef struct __attribute__((__packed__)){
-    BYTE b; // Blue channel
-    BYTE g; // Green channel
-    BYTE r; // Red channel
-    BYTE a; // Alpha channel
+  BYTE b; // Blue channel
+  BYTE g; // Green channel
+  BYTE r; // Red channel
+  BYTE a; // Alpha channel
 }RGBQUAD;
 
 typedef struct __attribute__((__packed__)){
-  WORD bfType; // Should be "BM"
+  WORD  bfType; // Should be "BM"
   DWORD bfSize;  // 4 bytes with the size
-  WORD bfReserved1; // 2 bytes reserved
-  WORD bfReserved2; // 2 bytes reserved
+  WORD  bfReserved1; // 2 bytes reserved
+  WORD  bfReserved2; // 2 bytes reserved
   DWORD bfOffBits; // offset where the pixel array can be found
 }BITMAPFILEHEADER, *PBITMAPFILEHEADER;
 
@@ -84,7 +85,7 @@ typedef struct __attribute__((__packed__)){
   WORD  biBitCount; // number of bits per pixel
   DWORD biCompression; // if compression BI_RGB = 0 ó BI_BITFIELDS = 3
   DWORD biSizeImage; // size of the array data including padding
-  LONG biXPelsPerMeter; // hor resolution of the image
+  LONG  biXPelsPerMeter; // hor resolution of the image
   LONG  biYPelsPerMeter; // ver resoilution of the image
   DWORD biClrUsed; // number of colours in the palette, 0 if it uses all
   DWORD biClrImportant; // number of important colours, 0 if all are imp
@@ -320,6 +321,24 @@ int reduce(BMPFILE *image, int factor, int *error);
 
 int enlarge(BMPFILE *image, int factor, int *error);
 
+/**crop***********************************************************************
+
+  Resume       Cut the image given two points
+
+  Description  Given two points: (x1,y1) and (x2,y2) [in percentage] preserves the bitmap
+            defined by this rectangle. (x1,y1) must be the upper left corner,
+            and (x2,y2) must be the lower rigth corner.
+               If there is an error, the corresponding variable will be set
+               properly and the function will return -1.
+
+  Colat. Effe. Return the new image in the pointer from the original image
+
+  See also    d
+
+******************************************************************************/
+
+int crop(BMPFILE *image, uchar x1, uchar y1, uchar x2, uchar y2, int *error);
+
 /**Function*******************************************************************
 
   Resume       [obligatorio]
@@ -333,5 +352,4 @@ int enlarge(BMPFILE *image, int factor, int *error);
   See also     [opcional]
 
 ******************************************************************************/
-
 #endif
