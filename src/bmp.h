@@ -268,6 +268,17 @@ void bitone(BMPFILE *image, RGBTRIPLE dark, RGBTRIPLE light, int threshold);
 
 void grayscale(BMPFILE *image, char rgby);
 
+/**blackandwhite***************************************************************
+
+  Resume       Convert the image to binary using the optimal threshold value
+            given by Otsu's Method.
+
+  see also     https://en.wikipedia.org/wiki/Otsu%27s_method
+
+******************************************************************************/
+
+void blackandwhite(BMPFILE *image);
+
 /**invert*********************************************************************
 
   Resume       Inverts the color of the image

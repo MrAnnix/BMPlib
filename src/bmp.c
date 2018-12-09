@@ -634,6 +634,58 @@ void invert(BMPFILE *image){
   }
 }
 
+void blackandwhite(BMPFILE *image){
+  unsigned int histo[256] = {0};
+
+  int i,j,y;
+  for(i=0; i<image->ih.biHeight; i++){
+    for (j=0; j<image->ih.biWidth; j++){
+      y = image->bitmap[i][j].r*0.2126 + image->bitmap[i][j].g*0.7152
+          + image->bitmap[i][j].b*0.0722;
+      histo[y]++;
+    }
+  }
+  int total = image->ih.biWidth * image->ih.biHeight;
+  //Otsu's Method
+  double sum = 0;
+  for(int i=0 ; i<256 ; i++){
+    sum += i * histo[i];
+  }
+
+  double var_max = 0;
+
+  double sumB = 0;
+  int wB = 0;
+  int wF = 0;
+  int threshold = 0;
+
+  for(i=0; i<256; ++i){
+    wB += histo[i];
+    wF = total - wB;
+    if(wB == 0 || wF == 0){
+      continue;
+    }
+
+    sumB += i*histo[i];
+
+    double mB = sumB/wB;
+    double mF = (sum - sumB)/wF;
+
+    double between = (double)wB * (double)wF * (mB - mF) * (mB - mF);
+
+    if(between>var_max){
+      threshold = i;
+      var_max = between;
+    }
+  }
+
+  printf("%d\n", threshold);
+
+  RGBTRIPLE light = {0xFF,0xFF,0xFF};
+  RGBTRIPLE dark = {0x00,0x00,0x00};
+  bitone(image, dark, light, threshold*3);
+}
+
 void mirror(BMPFILE *image, char hv, int *error){
   BMPFILE aux;
 
