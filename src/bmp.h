@@ -397,6 +397,16 @@ int enlarge(BMPFILE *image, int factor, int *error);
 int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
         , unsigned char x_2, unsigned char y_2, int *error);
 
+/**blur***********************************************************************
+
+  Resume       Given a radious, compute a Gaussian Blur
+
+  See also     https://en.wikipedia.org/wiki/Gaussian_blur
+
+******************************************************************************/
+
+int blur(BMPFILE *image, int radii, int *error);
+
 /**Function*******************************************************************
 
   Resume       [obligatorio]

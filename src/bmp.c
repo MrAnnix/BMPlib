@@ -41,6 +41,7 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <math.h>
 #include <errno.h>
 
 #include "bmp.h"
@@ -108,7 +109,15 @@ double sinc(double var);
 
 double _L(double var);
 
+double _G(double var, double sigma);
+
 double fast_sin(double var);
+
+double fast_exp(double x);
+
+int max(int a, int b);
+
+int min(int a, int b);
 
 double d_max(int n_args, double  a, double b, ...);
 
@@ -487,8 +496,8 @@ void sepia(BMPFILE *image){
   }
 }
 
-void saturation(BMPFILE *image, int contrast_p){
-  double contrast_d = ((double)contrast_p)/100.0;
+void saturation(BMPFILE *image, int sat_p){
+  double contrast_d = ((double)sat_p)/100.0;
 
   int i,j;
   float r,g,b,h,s,v;
@@ -678,8 +687,6 @@ void blackandwhite(BMPFILE *image){
       var_max = between;
     }
   }
-
-  printf("%d\n", threshold);
 
   RGBTRIPLE light = {0xFF,0xFF,0xFF};
   RGBTRIPLE dark = {0x00,0x00,0x00};
@@ -987,6 +994,74 @@ int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
   return 0;
 }
 
+int blur(BMPFILE *image, int radius, int *error){
+  if(radius<2){
+    *error = UNKNOWN;
+    return -1;
+  }
+  int i, j, k, l, weight;
+
+  int s_kernel = 10;
+  double gaussian_kernel[10][10];
+
+  double ii, jj;
+  for(i=0; i<s_kernel; i++){
+    for(j=0; j<s_kernel; j++){
+      ii = (double)(i-s_kernel/2);
+      jj = (double)(j-s_kernel/2);
+      gaussian_kernel[i][j] = _G(ii, radius)*_G(jj, radius);
+    }
+  }
+
+  double norm = 1/gaussian_kernel[0][0];
+  int max_weight = 0;
+
+  for(i=0; i<s_kernel; i++){
+    for(j=0; j<s_kernel; j++){
+      gaussian_kernel[i][j] *= norm;
+      max_weight += gaussian_kernel[i][j];
+    }
+  }
+
+	int kern_len = s_kernel/2;
+	int pixel[3];
+
+  RGBTRIPLE **new_bitmap = generate_bitmap(image->ih.biHeight, image->ih.biWidth
+          , error);
+  if(new_bitmap == NULL){
+    return -1;
+  }
+
+  for(i=0; i<image->ih.biHeight; i++){
+    for(j=0; j<image->ih.biWidth; j++){
+      memset(pixel, 0, 3*sizeof(int));
+			weight = max_weight;
+      for(k=0; k<s_kernel; k++){
+        for(l=0; l<s_kernel; l++){
+          int h = i-kern_len+k;
+          int w = j-kern_len+l;
+          int gaussian_term = (int) gaussian_kernel[k][l];
+          if((h>=0)&&(w>=0)&&(h<image->ih.biHeight)&&(w<image->ih.biWidth)){
+            pixel[0] += gaussian_term * image->bitmap[h][w].r;
+            pixel[1] += gaussian_term * image->bitmap[h][w].g;
+            pixel[2] += gaussian_term * image->bitmap[h][w].b;
+          }else{
+            weight -= gaussian_term;
+          }
+        }
+      }
+      new_bitmap[i][j].r = pixel[0]/weight;
+      new_bitmap[i][j].g = pixel[1]/weight;
+      new_bitmap[i][j].b = pixel[2]/weight;
+		}
+	}
+
+  free_bitmap(image->bitmap, image->ih.biHeight);
+  image->bitmap = new_bitmap;
+
+  return 0;
+}
+
 /*---------------------------------------------------------------------------*/
 /* Static function definitions                                               */
 /*---------------------------------------------------------------------------*/
@@ -1275,6 +1350,24 @@ double _L(double var){//Lanczos kernel window size = 2
   return 0;
 }
 
+double _G(double var, double sigma){//Gaussian function
+  return (1/(2*E_PI*sigma*sigma))*fast_exp(-(var*var)/(2*sigma*sigma));
+}
+
+int max(int a, int b){
+  if(a > b){
+    return a;
+  }
+  return b;
+}
+
+int min(int a, int b){
+  if(a < b){
+    return a;
+  }
+  return b;
+}
+
 double d_max(int n_args, double  a, double b, ...){
   n_args -= 2;
   double maximum, aux;
@@ -1323,4 +1416,19 @@ double d_min(int n_args, double  a, double b, ...){
 
   va_end (numbers);
   return minimum;
+}
+
+double fast_exp(double x){
+  volatile union{
+    float f;
+    unsigned int i;
+  }cvt;
+
+  float t = x * 1.442695041;
+  float fi = (float)((int)t);
+  float f = t - fi;
+  int i = (int)fi;
+  cvt.f = (0.3371894346 * f + 0.657636276) * f + 1.00172476;
+  cvt.i += (i << 23);
+  return (double)cvt.f;
 }
