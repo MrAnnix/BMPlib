@@ -56,6 +56,8 @@ SOFTWARE.
 #define E_TAU   6.283185307179586476925286766559005768394338798750211641950
 #define E_PI_SQ 9.869604401089358618834490999876151135313699407240790626413
 
+#define SIZE_GAUSSIAN_KERNEL 20
+
 static const char *error_map_bmp[NUM_ERROR_MSGS_BMP] =
   {
     "Success",
@@ -994,15 +996,36 @@ int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
   return 0;
 }
 
-int blur(BMPFILE *image, int radius, int *error){
+int blur(BMPFILE *image, int s_kernel, int radius, int *error){
   if(radius<2){
     *error = UNKNOWN;
     return -1;
   }
-  int i, j, k, l, weight;
+  int i, j, k, l;
+  double weight;
 
-  int s_kernel = 10;
-  double gaussian_kernel[10][10];
+  if(s_kernel == 0){
+    s_kernel = 4*radius;
+  }
+
+  double **gaussian_kernel = calloc(s_kernel, sizeof(double *));
+  if(gaussian_kernel == NULL){
+    *error = errno;
+    return -1;
+  }
+  for(i=0; i<s_kernel; i++){
+    gaussian_kernel[i] = calloc(s_kernel, sizeof(double));
+    if(gaussian_kernel[i] == NULL){
+        for(;i>0; i--){
+          free(gaussian_kernel[i-1]);
+        }free(gaussian_kernel);
+        *error = errno;
+        return -1;
+    }
+  }
+
+  //s_kernel = SIZE_GAUSSIAN_KERNEL;
+  //double gaussian_kernel[SIZE_GAUSSIAN_KERNEL][SIZE_GAUSSIAN_KERNEL];
 
   double ii, jj;
   for(i=0; i<s_kernel; i++){
@@ -1014,7 +1037,7 @@ int blur(BMPFILE *image, int radius, int *error){
   }
 
   double norm = 1/gaussian_kernel[0][0];
-  int max_weight = 0;
+  double max_weight = 0;
 
   for(i=0; i<s_kernel; i++){
     for(j=0; j<s_kernel; j++){
@@ -1024,7 +1047,7 @@ int blur(BMPFILE *image, int radius, int *error){
   }
 
 	int kern_len = s_kernel/2;
-	int pixel[3];
+	double pixel[3];
 
   RGBTRIPLE **new_bitmap = generate_bitmap(image->ih.biHeight, image->ih.biWidth
           , error);
@@ -1034,27 +1057,37 @@ int blur(BMPFILE *image, int radius, int *error){
 
   for(i=0; i<image->ih.biHeight; i++){
     for(j=0; j<image->ih.biWidth; j++){
-      memset(pixel, 0, 3*sizeof(int));
+      memset(pixel, 0, 3*sizeof(double));
 			weight = max_weight;
       for(k=0; k<s_kernel; k++){
         for(l=0; l<s_kernel; l++){
           int h = i-kern_len+k;
           int w = j-kern_len+l;
-          int gaussian_term = (int) gaussian_kernel[k][l];
+          double gaussian_term = gaussian_kernel[k][l];
           if((h>=0)&&(w>=0)&&(h<image->ih.biHeight)&&(w<image->ih.biWidth)){
-            pixel[0] += gaussian_term * image->bitmap[h][w].r;
-            pixel[1] += gaussian_term * image->bitmap[h][w].g;
-            pixel[2] += gaussian_term * image->bitmap[h][w].b;
+            pixel[0] += gaussian_term * (double)image->bitmap[h][w].r;
+            pixel[1] += gaussian_term * (double)image->bitmap[h][w].g;
+            pixel[2] += gaussian_term * (double)image->bitmap[h][w].b;
           }else{
             weight -= gaussian_term;
           }
         }
       }
-      new_bitmap[i][j].r = pixel[0]/weight;
-      new_bitmap[i][j].g = pixel[1]/weight;
-      new_bitmap[i][j].b = pixel[2]/weight;
+      pixel[0] /= weight;
+      pixel[1] /= weight;
+      pixel[2] /= weight;
+      pixel[0] = (pixel[0] > 255 ? 255 : (pixel[0] < 0 ? 0 : pixel[0]));
+      pixel[1] = (pixel[1] > 255 ? 255 : (pixel[1] < 0 ? 0 : pixel[1]));
+      pixel[2] = (pixel[2] > 255 ? 255 : (pixel[2] < 0 ? 0 : pixel[2]));
+      new_bitmap[i][j].r = pixel[0];
+      new_bitmap[i][j].g = pixel[1];
+      new_bitmap[i][j].b = pixel[2];
 		}
 	}
+
+  for(i=0; i<s_kernel; i++){
+    free(gaussian_kernel[i]);
+  }free(gaussian_kernel);
 
   free_bitmap(image->bitmap, image->ih.biHeight);
   image->bitmap = new_bitmap;
@@ -1350,8 +1383,8 @@ double _L(double var){//Lanczos kernel window size = 2
   return 0;
 }
 
-double _G(double var, double sigma){//Gaussian function
-  return (1/(2*E_PI*sigma*sigma))*fast_exp(-(var*var)/(2*sigma*sigma));
+double _G(double x, double sigma){//Gaussian function
+  return (1/(2*E_PI*sigma*sigma))*fast_exp(-(x*x)/(2*sigma*sigma));
 }
 
 int max(int a, int b){

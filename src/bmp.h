@@ -399,13 +399,15 @@ int crop(BMPFILE *image, unsigned char x_1, unsigned char y_1
 
 /**blur***********************************************************************
 
-  Resume       Given a radious, compute a Gaussian Blur
+  Resume       Given a radious, compute a Gaussian Blur with a certain quality
+               (size of gaussian kernel). If quality is 0, it will be choosed
+               automatically.
 
   See also     https://en.wikipedia.org/wiki/Gaussian_blur
 
 ******************************************************************************/
 
-int blur(BMPFILE *image, int radii, int *error);
+int blur(BMPFILE *image, int quality, int radii, int *error);
 
 /**Function*******************************************************************
 
